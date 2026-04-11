@@ -1,0 +1,14 @@
+# Configuración con tokens y API keys — NUNCA subir
+config.py
+
+# Base de datos local
+morning.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# VS Code
+.vscode/
