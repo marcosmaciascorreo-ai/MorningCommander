@@ -9,9 +9,9 @@ import requests
 import feedparser
 from datetime import datetime
 
-import anthropic
+from openai import OpenAI
 
-from config import ANTHROPIC_API_KEY, CIUDAD_LAT, CIUDAD_LON, CIUDAD_NAME
+from config import OPENAI_API_KEY, CIUDAD_LAT, CIUDAD_LON, CIUDAD_NAME
 import db
 
 # ── TRADUCCIONES ──────────────────────────────────────────────────────────────
@@ -147,9 +147,9 @@ def _get_noticias_raw_sync() -> list[str]:
     return titulares[:10]
 
 
-def _generar_resumen_claude_sync(titulares_raw: list[str]) -> str | None:
+def _generar_resumen_openai_sync(titulares_raw: list[str]) -> str | None:
     try:
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        client = OpenAI(api_key=OPENAI_API_KEY)
         prompt = (
             "Eres el editor de un briefing matutino personal.\n"
             "Tienes estos titulares y resúmenes de noticias del día:\n\n"
@@ -166,12 +166,12 @@ def _generar_resumen_claude_sync(titulares_raw: list[str]) -> str | None:
             "[Por qué importa o qué sigue en una línea]\n\n"
             "Responde SOLO con las 4 noticias formateadas, sin introducción ni cierre."
         )
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
             max_tokens=400,
             messages=[{"role": "user", "content": prompt}],
         )
-        return response.content[0].text.strip()
+        return response.choices[0].message.content.strip()
     except Exception:
         return None
 
@@ -206,10 +206,10 @@ async def generar_briefing() -> str:
         asyncio.to_thread(_get_noticias_raw_sync),
     )
 
-    # Generar resumen de noticias con Claude (o fallback)
-    if ANTHROPIC_API_KEY and titulares:
+    # Generar resumen de noticias con GPT-4o mini (o fallback)
+    if OPENAI_API_KEY and titulares:
         noticias_str = await asyncio.to_thread(
-            _generar_resumen_claude_sync, titulares
+            _generar_resumen_openai_sync, titulares
         )
         if not noticias_str:
             noticias_str = _fallback_noticias(titulares)

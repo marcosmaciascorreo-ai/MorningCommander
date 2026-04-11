@@ -67,23 +67,35 @@ AYUDA_TEXTO = (
 # ── COMANDOS ──────────────────────────────────────────────────────────────────
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    # Si MY_ID no está configurado todavía, solo mostrar el ID para que pueda configurarlo
+    if MY_ID == 0:
+        await update.message.reply_text(
+            f"Bot no configurado aun.\n\n"
+            f"Tu Telegram user_id es:\n"
+            f"{user_id}\n\n"
+            f"Copialo y pegalo en config.py en MY_ID, luego reinicia el bot.",
+        )
+        return
+
     if not is_me(update):
         await deny(update)
         return
 
     hora_actual = db.get_config("hora_envio", HORA_ENVIO)
     await update.message.reply_text(
-        f"☀️ Morning Commander activo.\n\n"
-        f"Te mandaré tu briefing cada mañana a las {hora_actual}.\n\n"
+        f"Morning Commander activo.\n\n"
+        f"Te mandare tu briefing cada manana a las {hora_actual}.\n\n"
         f"Comandos disponibles:\n"
-        f"/tarea    — Agregar tarea para mañana\n"
-        f"/tareas   — Ver tareas pendientes\n"
-        f"/hecho    — Marcar tarea como completada\n"
-        f"/borrar   — Eliminar una tarea\n"
-        f"/briefing — Recibir el briefing ahora mismo (prueba)\n"
-        f"/hora     — Cambiar la hora del envío diario\n"
-        f"/ayuda    — Ver todos los comandos\n\n"
-        f"Tu user_id es: {update.effective_user.id}"
+        f"/tarea    - Agregar tarea para manana\n"
+        f"/tareas   - Ver tareas pendientes\n"
+        f"/hecho    - Marcar tarea como completada\n"
+        f"/borrar   - Eliminar una tarea\n"
+        f"/briefing - Recibir el briefing ahora mismo (prueba)\n"
+        f"/hora     - Cambiar la hora del envio diario\n"
+        f"/ayuda    - Ver todos los comandos\n\n"
+        f"Tu user_id es: {user_id}"
     )
 
 
@@ -106,14 +118,13 @@ async def cmd_tarea_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         texto = " ".join(context.args).strip()
         db.agregar_tarea(texto)
         await update.message.reply_text(
-            f"✅ Tarea agregada: *{texto}*\n"
-            f"Aparecerá en tu briefing de mañana.",
-            parse_mode="Markdown",
+            f"Tarea agregada: {texto}\n"
+            f"Aparecera en tu briefing de manana.",
         )
         return ConversationHandler.END
 
     # Modo interactivo
-    await update.message.reply_text("¿Qué tarea quieres agregar?")
+    await update.message.reply_text("Que tarea quieres agregar?")
     return WAITING_TASK
 
 
@@ -122,9 +133,8 @@ async def cmd_tarea_recibir(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if texto:
         db.agregar_tarea(texto)
         await update.message.reply_text(
-            f"✅ Tarea agregada: *{texto}*\n"
-            f"Aparecerá en tu briefing de mañana.",
-            parse_mode="Markdown",
+            f"Tarea agregada: {texto}\n"
+            f"Aparecera en tu briefing de manana.",
         )
     else:
         await update.message.reply_text(
@@ -211,21 +221,19 @@ async def callback_tareas(update: Update, context: ContextTypes.DEFAULT_TYPE):
         texto = db.completar_tarea(tarea_id)
         if texto:
             await query.edit_message_text(
-                f"✅ *{texto}* marcada como completada. ¡Bien hecho! 💪",
-                parse_mode="Markdown",
+                f"Tarea completada: {texto}. Bien hecho!"
             )
         else:
-            await query.edit_message_text("No encontré esa tarea.")
+            await query.edit_message_text("No encontre esa tarea.")
 
     elif accion == "borrar":
         texto = db.borrar_tarea(tarea_id)
         if texto:
             await query.edit_message_text(
-                f"🗑️ Tarea eliminada: *{texto}*",
-                parse_mode="Markdown",
+                f"Tarea eliminada: {texto}"
             )
         else:
-            await query.edit_message_text("No encontré esa tarea.")
+            await query.edit_message_text("No encontre esa tarea.")
 
 
 # ── /briefing (modo prueba) ───────────────────────────────────────────────────
@@ -331,7 +339,7 @@ async def post_init(application: Application) -> None:
     hora = db.get_config("hora_envio", HORA_ENVIO)
     sched_module.init_scheduler(_enviar_briefing_automatico, hora)
 
-    print(f"☀️ Morning Commander activo. Briefing programado para las {hora}")
+    print(f"[OK] Morning Commander activo. Briefing programado para las {hora}")
     logger.info(f"Bot inicializado. Briefing programado para las {hora}.")
 
 
