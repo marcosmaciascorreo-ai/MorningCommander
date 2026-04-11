@@ -1,6 +1,3 @@
-# Configuración con tokens y API keys — NUNCA subir
-config.py
-
 # Base de datos local
 morning.db
 
