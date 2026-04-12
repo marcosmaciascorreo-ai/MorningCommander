@@ -245,10 +245,8 @@ async def cmd_briefing(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("⏳ Generando tu briefing...")
     try:
-        mensaje, audio_bytes = await briefing_module.generar_briefing()
+        mensaje = await briefing_module.generar_briefing()
         await update.message.reply_text(mensaje)
-        if audio_bytes:
-            await update.message.reply_voice(voice=audio_bytes)
     except Exception as e:
         logger.error(f"Error generando briefing: {e}")
         await update.message.reply_text(
@@ -325,10 +323,8 @@ async def _enviar_briefing_automatico():
         logger.error("_app no inicializada, no se puede enviar el briefing.")
         return
     try:
-        mensaje, audio_bytes = await briefing_module.generar_briefing()
+        mensaje = await briefing_module.generar_briefing()
         await _app.bot.send_message(chat_id=MY_ID, text=mensaje)
-        if audio_bytes:
-            await _app.bot.send_voice(chat_id=MY_ID, voice=audio_bytes)
         logger.info("Briefing diario enviado correctamente.")
     except Exception as e:
         logger.error(f"Error al enviar briefing automático: {e}")

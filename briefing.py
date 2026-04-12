@@ -141,9 +141,8 @@ def _get_noticias_raw_sync() -> list[str]:
                 resumen = _clean_html(
                     entry.get("summary", entry.get("description", ""))
                 )[:200].strip()
-                link = entry.get("link", "")
                 if titulo:
-                    titulares.append(f"TITULAR: {titulo}\nRESUMEN: {resumen}\nLINK: {link}")
+                    titulares.append(f"TITULAR: {titulo}\nRESUMEN: {resumen}")
         except Exception:
             continue
     return titulares[:15]
@@ -160,13 +159,11 @@ def _generar_resumen_openai_sync(titulares_raw: list[str]) -> str | None:
             "1. Elige las 4 noticias MÁS importantes e impactantes (asegúrate de incluir al menos una local si hay).\n"
             "2. Agrúpalas por tema con un emoji y categoría: POLÍTICA MX, ECONOMÍA, MUNDO, CHIHUAHUA, etc.\n"
             "3. Para cada noticia escribe 2 líneas MÁXIMO de texto: primera línea el hecho, segunda línea el por qué importa o qué sigue.\n"
-            "4. En una TERCERA línea, incluye el link a la noticia original empezando con '🔗 Leer más: '.\n"
-            "5. NO uses markdown, NO uses asteriscos, solo texto plano con saltos de línea.\n"
-            "6. Formato exacto por noticia:\n"
+            "4. NO uses markdown, NO uses asteriscos, solo texto plano con saltos de línea.\n"
+            "5. Formato exacto por noticia:\n"
             "[EMOJI] [CATEGORÍA EN MAYÚSCULAS]\n"
             "[Hecho principal en una línea]\n"
-            "[Por qué importa o qué sigue en una línea]\n"
-            "🔗 Leer más: [LINK]\n\n"
+            "[Por qué importa o qué sigue en una línea]\n\n"
             "Responde SOLO con las 4 noticias formateadas, sin introducción ni cierre."
         )
         response = client.chat.completions.create(
@@ -183,34 +180,17 @@ def _fallback_noticias(titulares: list[str]) -> str:
     """Muestra los primeros 4 titulares crudos si Claude falla."""
     lines = []
     for raw in titulares[:4]:
-        # Extract just the title and the link
-        lines_raw = raw.split("\n")
-        titulo = lines_raw[0].replace("TITULAR: ", "").strip()
-        link = lines_raw[2].replace("LINK: ", "").strip() if len(lines_raw) > 2 else ""
+        # Extract just the title line
+        titulo = raw.split("\n")[0].replace("TITULAR: ", "").strip()
         if titulo:
-            lines.append(f"• {titulo}\n  🔗 Leer más: {link}")
+            lines.append(f"• {titulo}")
     return "\n".join(lines) if lines else "📰 Noticias no disponibles."
-
-def _generar_audio_openai_sync(texto: str) -> bytes | None:
-    try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        # Limpiamos los links del texto porque no queremos que la IA los lea en voz alta letra por letra
-        texto_limpio_para_audio = re.sub(r"🔗 Leer más: https?://\S+", "", texto).strip()
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice="alloy",
-            input=texto_limpio_para_audio
-        )
-        return response.content
-    except Exception as e:
-        print(f"Error generando audio: {e}")
-        return None
 
 
 # ── ENSAMBLAJE DEL BRIEFING ───────────────────────────────────────────────────
 
-async def generar_briefing() -> tuple[str, bytes | None]:
-    """Genera mensaje de texto y opcionalmente archivo de audio."""
+async def generar_briefing() -> str:
+    """Genera el mensaje completo del briefing. Async para no bloquear el bot."""
     now = datetime.now()
 
     # Fecha en español
@@ -277,9 +257,4 @@ async def generar_briefing() -> tuple[str, bytes | None]:
         f"/tarea para agregar algo nuevo"
     )
 
-    if OPENAI_API_KEY:
-        audio_bytes = await asyncio.to_thread(_generar_audio_openai_sync, mensaje)
-    else:
-        audio_bytes = None
-
-    return mensaje, audio_bytes
+    return mensaje
