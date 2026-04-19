@@ -56,7 +56,8 @@ AYUDA_TEXTO = (
     "/hecho        — Marcar tarea completada\n"
     "/borrar       — Eliminar tarea\n"
     "/sap          — Ayuda con SAP o Excel\n"
-    "/podcast      — Recomendaciones de podcasts\n"
+    "/podcast      — Recomendaciones de podcasts (con links)\n"
+    "/finde        — Que hacer este fin de semana en Chihuahua\n"
     "/hora         — Cambiar hora del briefing manana\n"
     "/config_cal   — Conectar Google Calendar (iCal)\n"
     "/ayuda        — Ver este mensaje"
@@ -254,6 +255,18 @@ async def cmd_podcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "PODCASTS RECOMENDADOS PARA HOY\n\n" + recomendaciones
     )
 
+# ── /finde ────────────────────────────────────────────────────────────────────
+
+async def cmd_finde(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return
+    await update.message.reply_text("Buscando planes para el fin de semana en Chihuahua...")
+    sugerencias = await features_module.actividades_finde()
+    await update.message.reply_text(
+        "QUE HACER ESTE FIN DE SEMANA EN CHIHUAHUA\n\n" + sugerencias
+    )
+
 # ── /hora ─────────────────────────────────────────────────────────────────────
 
 async def cmd_hora_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -415,6 +428,7 @@ def main():
     app.add_handler(CommandHandler("hecho",      cmd_hecho))
     app.add_handler(CommandHandler("borrar",     cmd_borrar))
     app.add_handler(CommandHandler("podcast",    cmd_podcast))
+    app.add_handler(CommandHandler("finde",      cmd_finde))
     app.add_handler(CommandHandler("config_cal", cmd_config_cal))
     app.add_handler(tarea_conv)
     app.add_handler(hora_conv)
