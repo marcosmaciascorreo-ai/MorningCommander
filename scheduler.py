@@ -1,54 +1,61 @@
 """
-scheduler.py — Programación del envío diario con APScheduler
+scheduler.py — Programacion del briefing matutino y vespertino
 """
 
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-logger = logging.getLogger(__name__)
-
+logger   = logging.getLogger(__name__)
 TIMEZONE = "America/Chihuahua"
 
-# Instancia global del scheduler
 scheduler = AsyncIOScheduler(timezone=TIMEZONE)
 
 
-def init_scheduler(send_func, hora_str: str):
-    """Inicia el scheduler y programa el primer envío.
-
-    Args:
-        send_func: coroutine async que envía el briefing
-        hora_str:  hora en formato "HH:MM"
-    """
+def init_scheduler(send_manana_func, send_tarde_func, hora_manana: str, hora_tarde: str):
     if not scheduler.running:
         scheduler.start()
         logger.info("Scheduler iniciado.")
 
-    programar_briefing(send_func, hora_str)
+    programar_briefing(send_manana_func, hora_manana)
+    programar_briefing_tarde(send_tarde_func, hora_tarde)
 
 
 def programar_briefing(send_func, hora_str: str):
-    """Programa o reprograma el envío diario.
-
-    Elimina el job anterior (si existe) y crea uno nuevo.
-    """
+    """Programa o reprograma el briefing matutino."""
     try:
         hora, minuto = map(int, hora_str.split(":"))
     except ValueError:
-        logger.error(f"Hora inválida: {hora_str}. Se usará 05:50.")
         hora, minuto = 5, 50
 
-    # Eliminar job existente
-    if scheduler.get_job("briefing_diario"):
-        scheduler.remove_job("briefing_diario")
+    if scheduler.get_job("briefing_manana"):
+        scheduler.remove_job("briefing_manana")
 
     scheduler.add_job(
         send_func,
         CronTrigger(hour=hora, minute=minuto, timezone=TIMEZONE),
-        id="briefing_diario",
-        name="Briefing Diario",
-        misfire_grace_time=300,  # 5 minutos de margen si el sistema estaba dormido
+        id="briefing_manana",
+        name="Briefing Matutino",
+        misfire_grace_time=300,
     )
+    logger.info(f"Briefing manana programado: {hora:02d}:{minuto:02d} ({TIMEZONE})")
 
-    logger.info(f"Briefing programado para las {hora:02d}:{minuto:02d} ({TIMEZONE})")
+
+def programar_briefing_tarde(send_func, hora_str: str):
+    """Programa o reprograma el briefing vespertino."""
+    try:
+        hora, minuto = map(int, hora_str.split(":"))
+    except ValueError:
+        hora, minuto = 18, 0
+
+    if scheduler.get_job("briefing_tarde"):
+        scheduler.remove_job("briefing_tarde")
+
+    scheduler.add_job(
+        send_func,
+        CronTrigger(hour=hora, minute=minuto, timezone=TIMEZONE),
+        id="briefing_tarde",
+        name="Briefing Vespertino",
+        misfire_grace_time=300,
+    )
+    logger.info(f"Briefing tarde programado: {hora:02d}:{minuto:02d} ({TIMEZONE})")

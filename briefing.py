@@ -1,13 +1,12 @@
 """
-briefing.py — Genera el mensaje de briefing diario
-Obtiene clima, tipo de cambio, noticias (con Claude) y tareas.
+briefing.py — Genera el briefing matutino y vespertino de Morning Commander
 """
 
 import asyncio
 import re
 import requests
 import feedparser
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from openai import OpenAI
 
@@ -17,98 +16,108 @@ import db
 # ── TRADUCCIONES ──────────────────────────────────────────────────────────────
 
 WEATHERCODES: dict[int, str] = {
-    0:  "Despejado ☀️",
-    1:  "Mayormente despejado 🌤️",
-    2:  "Parcialmente nublado ⛅",
-    3:  "Nublado ☁️",
-    45: "Niebla 🌫️",
-    48: "Niebla con escarcha 🌫️",
-    51: "Llovizna ligera 🌦️",
-    53: "Llovizna moderada 🌦️",
-    55: "Llovizna intensa 🌦️",
-    61: "Lluvia ligera 🌧️",
-    63: "Lluvia moderada 🌧️",
-    65: "Lluvia intensa 🌧️",
-    71: "Nieve ligera 🌨️",
-    73: "Nieve moderada 🌨️",
-    75: "Nieve intensa 🌨️",
-    80: "Chubascos ligeros 🌦️",
-    81: "Chubascos moderados 🌦️",
-    82: "Chubascos violentos 🌦️",
-    95: "Tormenta eléctrica ⛈️",
-    99: "Tormenta con granizo ⛈️",
+    0:  "Despejado",
+    1:  "Mayormente despejado",
+    2:  "Parcialmente nublado",
+    3:  "Nublado",
+    45: "Niebla",
+    48: "Niebla con escarcha",
+    51: "Llovizna ligera",
+    53: "Llovizna",
+    55: "Llovizna intensa",
+    61: "Lluvia ligera",
+    63: "Lluvia",
+    65: "Lluvia intensa",
+    71: "Nieve ligera",
+    73: "Nieve",
+    75: "Nieve intensa",
+    80: "Chubascos",
+    81: "Chubascos",
+    82: "Chubascos fuertes",
+    95: "Tormenta",
+    99: "Tormenta con granizo",
 }
 
-DIAS_ES   = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-MESES_ES  = [
-    "enero", "febrero", "marzo", "abril", "mayo", "junio",
-    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+WEATHER_EMOJI: dict[int, str] = {
+    0: "☀️", 1: "🌤️", 2: "⛅", 3: "☁️",
+    45: "🌫️", 48: "🌫️",
+    51: "🌦️", 53: "🌦️", 55: "🌦️",
+    61: "🌧️", 63: "🌧️", 65: "🌧️",
+    71: "🌨️", 73: "🌨️", 75: "🌨️",
+    80: "🌦️", 81: "🌦️", 82: "🌦️",
+    95: "⛈️", 99: "⛈️",
+}
+
+DIAS_ES  = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
+MESES_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+            "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+# ── RSS FEEDS — MEXICO Y CHIHUAHUA ────────────────────────────────────────────
+
+RSS_FEEDS_MX = [
+    "https://www.eluniversal.com.mx/arc/outboundfeeds/rss/",
+    "https://www.animalpolitico.com/feed",
+    "https://www.elfinanciero.com.mx/arc/outboundfeeds/rss/",
+    "https://www.jornada.com.mx/rss/edicion.xml",
+]
+
+RSS_FEEDS_CHI = [
+    "https://www.nortedigital.mx/feed/",
+    "https://www.elheraldodechihuahua.com.mx/rss",
 ]
 
 
-# ── CLIMA ─────────────────────────────────────────────────────────────────────
+# ── CLIMA 3 DIAS ──────────────────────────────────────────────────────────────
 
-def _get_clima_sync() -> dict:
+def _get_clima_3dias_sync() -> list[dict]:
     try:
         url = (
             f"https://api.open-meteo.com/v1/forecast"
             f"?latitude={CIUDAD_LAT}&longitude={CIUDAD_LON}"
-            f"&daily=temperature_2m_max,temperature_2m_min,weathercode,windspeed_10m_max"
-            f"&hourly=relativehumidity_2m"
+            f"&daily=temperature_2m_max,temperature_2m_min,weathercode"
+            f"&hourly=relativehumidity_2m,windspeed_10m"
             f"&timezone=America%2FChihuahua"
-            f"&forecast_days=1"
+            f"&forecast_days=3"
         )
         resp = requests.get(url, timeout=5)
         resp.raise_for_status()
-        data = resp.json()
-
+        data  = resp.json()
         daily = data["daily"]
-        temp_max = round(daily["temperature_2m_max"][0])
-        temp_min = round(daily["temperature_2m_min"][0])
-        wcode    = int(daily["weathercode"][0])
-        wind     = round(daily["windspeed_10m_max"][0])
 
-        hourly_hum = data.get("hourly", {}).get("relativehumidity_2m", [])
-        humidity = round(sum(hourly_hum) / len(hourly_hum)) if hourly_hum else 0
+        hourly_hum  = data.get("hourly", {}).get("relativehumidity_2m", [])
+        hourly_wind = data.get("hourly", {}).get("windspeed_10m", [])
+        humedad = round(sum(hourly_hum[:24])  / 24) if hourly_hum  else 0
+        viento  = round(sum(hourly_wind[:24]) / 24) if hourly_wind else 0
 
-        condicion = WEATHERCODES.get(wcode, f"Código {wcode}")
-
-        return {
-            "temp_min":  temp_min,
-            "temp_max":  temp_max,
-            "condicion": condicion,
-            "viento":    wind,
-            "humedad":   humidity,
-            "ok":        True,
-        }
+        dias = []
+        for i in range(3):
+            wcode = int(daily["weathercode"][i])
+            dias.append({
+                "temp_min":  round(daily["temperature_2m_min"][i]),
+                "temp_max":  round(daily["temperature_2m_max"][i]),
+                "condicion": WEATHERCODES.get(wcode, "Variable"),
+                "emoji":     WEATHER_EMOJI.get(wcode, "🌡️"),
+                "humedad":   humedad if i == 0 else 0,
+                "viento":    viento  if i == 0 else 0,
+                "ok":        True,
+            })
+        return dias
     except Exception:
-        return {
-            "temp_min":  "--",
-            "temp_max":  "--",
-            "condicion": "No disponible",
-            "viento":    "--",
-            "humedad":   "--",
-            "ok":        False,
-        }
+        fallback = {"temp_min": "--", "temp_max": "--", "condicion": "No disponible",
+                    "emoji": "🌡️", "humedad": 0, "viento": 0, "ok": False}
+        return [fallback, fallback, fallback]
 
 
 # ── TIPO DE CAMBIO ────────────────────────────────────────────────────────────
 
 def _get_tipo_cambio_sync() -> dict:
     try:
-        resp = requests.get(
-            "https://api.exchangerate-api.com/v4/latest/USD",
-            timeout=5
-        )
+        resp = requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=5)
         resp.raise_for_status()
-        data  = resp.json()
-        rates = data["rates"]
-
+        rates      = resp.json()["rates"]
         mxn        = float(rates.get("MXN", 0))
-        eur_factor = float(rates.get("EUR", 1))  # EUR per 1 USD
-        # EUR/MXN = (MXN per USD) / (EUR per USD)
-        eur_mxn = mxn / eur_factor if eur_factor else 0
-
+        eur_factor = float(rates.get("EUR", 1))
+        eur_mxn    = mxn / eur_factor if eur_factor else 0
         return {"usd_mxn": f"{mxn:.2f}", "eur_mxn": f"{eur_mxn:.2f}", "ok": True}
     except Exception:
         return {"usd_mxn": "--", "eur_mxn": "--", "ok": False}
@@ -116,59 +125,71 @@ def _get_tipo_cambio_sync() -> dict:
 
 # ── NOTICIAS ──────────────────────────────────────────────────────────────────
 
-RSS_FEEDS = [
-    "https://feeds.bbci.co.uk/mundo/rss.xml",
-    "https://www.elfinanciero.com.mx/arc/outboundfeeds/rss/",
-    "https://www.elheraldodechihuahua.com.mx/rss.xml",
-]
-
-
 def _clean_html(text: str) -> str:
     text = re.sub(r"<[^>]+>", "", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    return re.sub(r"\s+", " ", text).strip()
 
 
-def _get_noticias_raw_sync() -> list[str]:
-    titulares: list[str] = []
-    for feed_url in RSS_FEEDS:
+def _get_noticias_raw_sync() -> dict:
+    result = {"mx": [], "chi": []}
+
+    for feed_url in RSS_FEEDS_MX:
         try:
             resp = requests.get(feed_url, timeout=5)
             resp.raise_for_status()
             feed = feedparser.parse(resp.content)
-            for entry in feed.entries[:5]:
+            for entry in feed.entries[:4]:
                 titulo  = _clean_html(entry.get("title", "")).strip()
                 resumen = _clean_html(
                     entry.get("summary", entry.get("description", ""))
-                )[:200].strip()
+                )[:150].strip()
                 if titulo:
-                    titulares.append(f"TITULAR: {titulo}\nRESUMEN: {resumen}")
+                    result["mx"].append(f"TITULAR: {titulo}\nRESUMEN: {resumen}")
         except Exception:
             continue
-    return titulares[:15]
+
+    for feed_url in RSS_FEEDS_CHI:
+        try:
+            resp = requests.get(feed_url, timeout=5)
+            resp.raise_for_status()
+            feed = feedparser.parse(resp.content)
+            for entry in feed.entries[:3]:
+                titulo = _clean_html(entry.get("title", "")).strip()
+                if titulo:
+                    result["chi"].append(f"TITULAR: {titulo}")
+        except Exception:
+            continue
+
+    return result
 
 
-def _generar_resumen_openai_sync(titulares_raw: list[str]) -> str | None:
+def _generar_resumen_openai_sync(noticias_raw: dict) -> str | None:
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
+
+        titulares_mx  = "\n\n".join(noticias_raw["mx"][:8])
+        titulares_chi = "\n".join(noticias_raw["chi"][:3])
+
         prompt = (
-            "Eres el editor de un briefing matutino personal.\n"
-            "Tienes estos titulares y resúmenes de noticias del día local e internacional:\n\n"
-            + "\n\n".join(titulares_raw)
-            + "\n\nTu tarea:\n"
-            "1. Elige las 4 noticias MÁS importantes e impactantes (asegúrate de incluir al menos una local si hay).\n"
-            "2. Agrúpalas por tema con un emoji y categoría: POLÍTICA MX, ECONOMÍA, MUNDO, CHIHUAHUA, etc.\n"
-            "3. Para cada noticia escribe 2 líneas MÁXIMO de texto: primera línea el hecho, segunda línea el por qué importa o qué sigue.\n"
-            "4. NO uses markdown, NO uses asteriscos, solo texto plano con saltos de línea.\n"
-            "5. Formato exacto por noticia:\n"
-            "[EMOJI] [CATEGORÍA EN MAYÚSCULAS]\n"
-            "[Hecho principal en una línea]\n"
-            "[Por qué importa o qué sigue en una línea]\n\n"
-            "Responde SOLO con las 4 noticias formateadas, sin introducción ni cierre."
+            f"Eres el editor de un briefing matutino para un hombre en {CIUDAD_NAME}, Mexico.\n\n"
+            "NOTICIAS NACIONALES:\n" + titulares_mx
+            + ("\n\nNOTICIAS CHIHUAHUA:\n" + titulares_chi if titulares_chi else "")
+            + "\n\nSelecciona 4 noticias priorizando:\n"
+            "1. Chihuahua local si hay algo relevante\n"
+            "2. Mexico: politica, economia, seguridad\n"
+            "3. Mundo solo si es muy impactante\n\n"
+            "FORMATO EXACTO — una noticia por bloque:\n"
+            "[EMOJI] [CATEGORIA EN MAYUSCULAS]\n"
+            "[UN RENGLON: hecho + consecuencia o dato clave]\n\n"
+            "Ejemplo:\n"
+            "ECONOMIA\n"
+            "Peso cae 0.8% tras decision de la Fed — creditos bancarios podrian encarecerse.\n\n"
+            "Reglas: 1 renglon por noticia, sin asteriscos, sin markdown, sin introduccion ni cierre."
         )
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            max_tokens=400,
+            max_tokens=280,
             messages=[{"role": "user", "content": prompt}],
         )
         return response.choices[0].message.content.strip()
@@ -176,85 +197,188 @@ def _generar_resumen_openai_sync(titulares_raw: list[str]) -> str | None:
         return None
 
 
-def _fallback_noticias(titulares: list[str]) -> str:
-    """Muestra los primeros 4 titulares crudos si Claude falla."""
+def _fallback_noticias(noticias_raw: dict) -> str:
+    todas = noticias_raw["mx"][:3] + noticias_raw["chi"][:1]
     lines = []
-    for raw in titulares[:4]:
-        # Extract just the title line
+    for raw in todas[:4]:
         titulo = raw.split("\n")[0].replace("TITULAR: ", "").strip()
         if titulo:
-            lines.append(f"• {titulo}")
-    return "\n".join(lines) if lines else "📰 Noticias no disponibles."
+            lines.append(f"- {titulo}")
+    return "\n".join(lines) if lines else "Noticias no disponibles en este momento."
 
 
-# ── ENSAMBLAJE DEL BRIEFING ───────────────────────────────────────────────────
+# ── CALENDARIO (iCal) ─────────────────────────────────────────────────────────
+
+def _get_eventos_calendario_sync(dias_adelante: int = 0) -> list[dict]:
+    ical_url = db.get_config("ical_url", "")
+    if not ical_url:
+        return []
+    try:
+        import icalendar
+        resp   = requests.get(ical_url, timeout=5)
+        resp.raise_for_status()
+        cal    = icalendar.Calendar.from_ical(resp.content)
+        target = (datetime.now() + timedelta(days=dias_adelante)).date()
+
+        eventos = []
+        for comp in cal.walk():
+            if comp.name != "VEVENT":
+                continue
+            dtstart = comp.get("dtstart")
+            if not dtstart:
+                continue
+            dt         = dtstart.dt
+            event_date = dt.date() if hasattr(dt, "date") else dt
+            if event_date == target:
+                hora   = dt.strftime("%H:%M") if hasattr(dt, "hour") else "Todo el dia"
+                titulo = str(comp.get("summary", "Sin titulo"))
+                eventos.append({"hora": hora, "titulo": titulo})
+
+        return sorted(eventos, key=lambda x: x["hora"])
+    except ImportError:
+        return []
+    except Exception:
+        return []
+
+
+# ── BRIEFING MATUTINO ─────────────────────────────────────────────────────────
 
 async def generar_briefing() -> str:
-    """Genera el mensaje completo del briefing. Async para no bloquear el bot."""
-    now = datetime.now()
-
-    # Fecha en español
+    now        = datetime.now()
     dia_semana = DIAS_ES[now.weekday()]
     dia        = now.day
     mes        = MESES_ES[now.month - 1]
     semana     = now.isocalendar()[1]
+    es_lunes   = now.weekday() == 0
 
-    # Fetch externo en paralelo (no bloquea el event loop)
-    clima, cambio, titulares = await asyncio.gather(
-        asyncio.to_thread(_get_clima_sync),
+    # Fetch paralelo
+    dias_clima, cambio, noticias_raw = await asyncio.gather(
+        asyncio.to_thread(_get_clima_3dias_sync),
         asyncio.to_thread(_get_tipo_cambio_sync),
         asyncio.to_thread(_get_noticias_raw_sync),
     )
 
-    # Generar resumen de noticias con GPT-4o mini (o fallback)
-    if OPENAI_API_KEY and titulares:
-        noticias_str = await asyncio.to_thread(
-            _generar_resumen_openai_sync, titulares
-        )
+    # Noticias con GPT o fallback
+    if OPENAI_API_KEY and (noticias_raw["mx"] or noticias_raw["chi"]):
+        noticias_str = await asyncio.to_thread(_generar_resumen_openai_sync, noticias_raw)
         if not noticias_str:
-            noticias_str = _fallback_noticias(titulares)
-    elif titulares:
-        noticias_str = _fallback_noticias(titulares)
+            noticias_str = _fallback_noticias(noticias_raw)
     else:
-        noticias_str = "📰 Noticias no disponibles en este momento."
+        noticias_str = _fallback_noticias(noticias_raw)
 
-    # Datos locales (SQLite — rápido, OK en hilo principal)
+    # Calendario hoy
+    eventos_hoy = await asyncio.to_thread(_get_eventos_calendario_sync, 0)
+
+    # DB sync
     tareas = db.obtener_tareas()
     frase_texto, frase_autor = db.obtener_frase()
 
-    if tareas:
-        tareas_str = "\n".join(f"{i + 1}. {t[1]}" for i, t in enumerate(tareas))
-    else:
-        tareas_str = "Sin tareas pendientes. ¡Día libre! 🎯"
+    # Clima 3 dias
+    hoy_c  = dias_clima[0]
+    man_c  = dias_clima[1]
+    pman_c = dias_clima[2]
+    lbl_man  = DIAS_ES[(now.weekday() + 1) % 7][:3]
+    lbl_pman = DIAS_ES[(now.weekday() + 2) % 7][:3]
+
+    tareas_str = (
+        "\n".join(f"{i+1}. {t[1]}" for i, t in enumerate(tareas))
+        if tareas else "Sin tareas pendientes. Dia libre!"
+    )
+
+    # Seccion agenda hoy
+    agenda_str = ""
+    if eventos_hoy:
+        lineas = "\n".join(f"   {ev['hora']}  {ev['titulo']}" for ev in eventos_hoy)
+        agenda_str = f"\n📅 TU AGENDA HOY\n{lineas}\n"
+
+    # Seccion especial lunes: agenda de toda la semana
+    lunes_str = ""
+    if es_lunes:
+        lineas_semana = []
+        for d in range(1, 5):
+            evs = await asyncio.to_thread(_get_eventos_calendario_sync, d)
+            if evs:
+                lbl = DIAS_ES[(now.weekday() + d) % 7][:3]
+                for ev in evs[:2]:
+                    lineas_semana.append(f"   {lbl}  {ev['hora']}  {ev['titulo']}")
+        if lineas_semana:
+            lunes_str = "\n📋 TU SEMANA\n" + "\n".join(lineas_semana) + "\n"
 
     mensaje = (
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"☀️ BUENOS DÍAS, MARCOS\n"
+        f"☀️ BUENOS DIAS, MARCOS\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"📅 {dia_semana} {dia} de {mes} · Semana {semana}\n"
         f"\n"
-        f"🌤️ {CIUDAD_NAME.upper()} — HOY\n"
-        f"🌡️ {clima['temp_min']}°C → {clima['temp_max']}°C · {clima['condicion']}\n"
-        f"💨 Viento {clima['viento']} km/h · 💧 Humedad {clima['humedad']}%\n"
+        f"🌤️ {CIUDAD_NAME.upper()} — PRONOSTICO 3 DIAS\n"
+        f"Hoy   🌡️ {hoy_c['temp_min']}°→{hoy_c['temp_max']}°  {hoy_c['emoji']} {hoy_c['condicion']}\n"
+        f"{lbl_man}   🌡️ {man_c['temp_min']}°→{man_c['temp_max']}°  {man_c['emoji']} {man_c['condicion']}\n"
+        f"{lbl_pman}   🌡️ {pman_c['temp_min']}°→{pman_c['temp_max']}°  {pman_c['emoji']} {pman_c['condicion']}\n"
+        f"💨 Viento {hoy_c['viento']} km/h · 💧 Humedad {hoy_c['humedad']}%\n"
         f"\n"
         f"💵 TIPO DE CAMBIO\n"
         f"🇺🇸 USD/MXN: ${cambio['usd_mxn']}\n"
         f"🇪🇺 EUR/MXN: ${cambio['eur_mxn']}\n"
+        f"{agenda_str}"
+        f"{lunes_str}"
         f"\n"
-        f"📲 LO QUE PASÓ HOY\n"
+        f"📲 MEXICO HOY\n"
         f"━━━━━━━━━━━━\n"
         f"{noticias_str}\n"
         f"━━━━━━━━━━━━\n"
         f"\n"
-        f"✅ TUS TAREAS DE HOY\n"
+        f"✅ TUS TAREAS\n"
         f"{tareas_str}\n"
         f"\n"
-        f"💬 FRASE DEL DÍA\n"
+        f"💬 FRASE DEL DIA\n"
         f'"{frase_texto}"\n'
         f"— {frase_autor}\n"
         f"\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"/tarea para agregar algo nuevo"
+    )
+
+    return mensaje
+
+
+# ── BRIEFING VESPERTINO (6PM) ─────────────────────────────────────────────────
+
+async def generar_briefing_tarde() -> str:
+    now     = datetime.now()
+    dia_man = DIAS_ES[(now.weekday() + 1) % 7]
+
+    # Datos
+    dias_clima    = await asyncio.to_thread(_get_clima_3dias_sync)
+    eventos_man   = await asyncio.to_thread(_get_eventos_calendario_sync, 1)
+    tareas        = db.obtener_tareas()
+
+    man_c = dias_clima[1] if len(dias_clima) > 1 else dias_clima[0]
+
+    tareas_str = (
+        "\n".join(f"- {t[1]}" for t in tareas)
+        if tareas else "Todo listo. Sin pendientes para manana."
+    )
+
+    agenda_str = ""
+    if eventos_man:
+        lineas = "\n".join(f"   {ev['hora']}  {ev['titulo']}" for ev in eventos_man)
+        agenda_str = f"\n📅 MANANA EN TU AGENDA\n{lineas}\n"
+
+    mensaje = (
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🌆 RESUMEN DEL DIA\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Son las 6pm · Como te fue?\n"
+        f"\n"
+        f"📋 PENDIENTES\n"
+        f"{tareas_str}\n"
+        f"\n"
+        f"🌤️ MANANA — {dia_man.upper()}\n"
+        f"🌡️ {man_c['temp_min']}°→{man_c['temp_max']}°  {man_c['emoji']} {man_c['condicion']}\n"
+        f"{agenda_str}"
+        f"\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"/hecho para cerrar tareas del dia"
     )
 
     return mensaje

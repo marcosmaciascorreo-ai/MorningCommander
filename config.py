@@ -1,9 +1,8 @@
 import os
 
 # ============================================================
-# MORNING COMMANDER — CONFIGURACIÓN
-# Todos los valores vienen de variables de entorno.
-# Configuralas en Railway (o en tu sistema local).
+# MORNING COMMANDER — CONFIGURACION
+# En Railway los valores vienen de variables de entorno.
 # ============================================================
 
 TOKEN          = os.environ.get("TOKEN",          "")
@@ -15,5 +14,8 @@ CIUDAD_LAT  = float(os.environ.get("CIUDAD_LAT",  "28.6353"))
 CIUDAD_LON  = float(os.environ.get("CIUDAD_LON",  "-106.0889"))
 CIUDAD_NAME = os.environ.get("CIUDAD_NAME", "Chihuahua")
 
-# Hora del briefing diario (formato 24h HH:MM)
-HORA_ENVIO  = os.environ.get("HORA_ENVIO", "05:50")
+# Hora del briefing matutino (HH:MM)
+HORA_ENVIO      = os.environ.get("HORA_ENVIO",      "05:50")
+
+# Hora del briefing vespertino (HH:MM)
+HORA_ENVIO_TARDE = os.environ.get("HORA_ENVIO_TARDE", "18:00")
