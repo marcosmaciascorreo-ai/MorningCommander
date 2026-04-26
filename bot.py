@@ -32,13 +32,15 @@ logger = logging.getLogger(__name__)
 
 # ── ESTADOS ───────────────────────────────────────────────────────────────────
 
-WAITING_TASK       = 1
-WAITING_HOUR       = 2
-WAITING_SAP        = 3
-WAITING_MOOD       = 4
+WAITING_TASK         = 1
+WAITING_HOUR         = 2
+WAITING_SAP          = 3
+WAITING_MOOD         = 4
 WAITING_INGREDIENTES = 5
-WAITING_CIUDAD     = 6
-WAITING_MOTIVACION = 7
+WAITING_CIUDAD       = 6
+WAITING_MOTIVACION   = 7
+WAITING_PLAYLIST     = 8
+WAITING_CITA         = 9
 
 # ── REFERENCIA GLOBAL ─────────────────────────────────────────────────────────
 
@@ -75,7 +77,9 @@ AYUDA_TEXTO = (
     "/chiste       — Chiste del dia\n"
     "/motivacion   — Mensaje motivacional\n"
     "/clima_viaje  — Clima de cualquier ciudad\n"
-    "/podcast      — Recomendaciones de podcasts\n\n"
+    "/podcast      — Recomendaciones de podcasts\n"
+    "/playlist     — Playlist de 10 canciones para lo que vayas a hacer\n"
+    "/cita         — Plan de cita o salida especial en Chihuahua\n\n"
     "TRABAJO\n"
     "/sap          — Ayuda con SAP o Excel\n\n"
     "CONFIGURACION\n"
@@ -421,6 +425,46 @@ async def cmd_noticias_chi(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     noticias = await features_module.noticias_chihuahua()
     await update.message.reply_text("NOTICIAS CHIHUAHUA\n\n" + noticias)
 
+# ── /playlist ─────────────────────────────────────────────────────────────────
+
+async def cmd_playlist_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "Para que es la playlist?\n\n"
+        "Ejemplos: carretera, gym, trabajar concentrado, cena romantica, "
+        "precopeo, domingo relajado, correr, fiesta en casa"
+    )
+    return WAITING_PLAYLIST
+
+async def cmd_playlist_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    actividad = update.message.text.strip()
+    await update.message.reply_text(f"Armando playlist para: {actividad}...")
+    resultado = await features_module.generar_playlist(actividad)
+    await update.message.reply_text("PLAYLIST\n\n" + resultado)
+    return ConversationHandler.END
+
+# ── /cita ─────────────────────────────────────────────────────────────────────
+
+async def cmd_cita_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "Que tipo de ocasion es?\n\n"
+        "Ejemplos: primera cita, aniversario, cena sorpresa, "
+        "cumpleanos de ella, reconciliacion, solo quiero algo diferente"
+    )
+    return WAITING_CITA
+
+async def cmd_cita_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    ocasion = update.message.text.strip()
+    await update.message.reply_text("Disenando el plan...")
+    resultado = await features_module.idea_cita(ocasion)
+    await update.message.reply_text("PLAN ESPECIAL EN CHIHUAHUA\n\n" + resultado)
+    return ConversationHandler.END
+
 # ── /hora ─────────────────────────────────────────────────────────────────────
 
 async def cmd_hora_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
@@ -631,6 +675,16 @@ def main():
         states={WAITING_CIUDAD: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_clima_viaje_recibir)]},
         fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
     )
+    playlist_conv = ConversationHandler(
+        entry_points=[CommandHandler("playlist", cmd_playlist_start)],
+        states={WAITING_PLAYLIST: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_playlist_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
+    cita_conv = ConversationHandler(
+        entry_points=[CommandHandler("cita", cmd_cita_start)],
+        states={WAITING_CITA: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_cita_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
 
     # Handlers simples
     app.add_handler(CommandHandler("start",        cmd_start))
@@ -658,6 +712,8 @@ def main():
     app.add_handler(receta_conv)
     app.add_handler(motivacion_conv)
     app.add_handler(clima_viaje_conv)
+    app.add_handler(playlist_conv)
+    app.add_handler(cita_conv)
 
     app.add_handler(CallbackQueryHandler(callback_tareas))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_unknown))

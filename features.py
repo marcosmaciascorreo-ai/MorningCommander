@@ -633,3 +633,68 @@ def _noticias_chihuahua_sync() -> str:
 
 async def noticias_chihuahua() -> str:
     return await asyncio.to_thread(_noticias_chihuahua_sync)
+
+
+# ── PLAYLIST ──────────────────────────────────────────────────────────────────
+
+def _generar_playlist_sync(actividad: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=700,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Crea una playlist de 10 canciones para: {actividad}\n\n"
+                    "El usuario es mexicano, le gusta musica variada. "
+                    "Mezcla generos que peguen con la actividad.\n\n"
+                    "Formato por cancion (sin asteriscos ni numeracion con punto):\n"
+                    "TITULO — ARTISTA\n"
+                    "Spotify: https://open.spotify.com/search/[titulo+artista url-encoded]\n\n"
+                    "Incluye una linea al final con el 'mood' general de la playlist en 5 palabras."
+                )
+            }],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude generar la playlist. Intenta de nuevo."
+
+
+async def generar_playlist(actividad: str) -> str:
+    return await asyncio.to_thread(_generar_playlist_sync, actividad)
+
+
+# ── IDEA DE CITA / PLAN ESPECIAL ──────────────────────────────────────────────
+
+def _idea_cita_sync(ocasion: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=500,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Ocasion: {ocasion}\n\n"
+                    "Diseña un plan especifico para una cita o salida en Chihuahua, Mexico. "
+                    "Que sea romantico, memorable y ejecutable este fin de semana.\n\n"
+                    "Incluye:\n"
+                    "PLAN DEL DIA\n"
+                    "Hora inicio: [hora sugerida]\n\n"
+                    "1. [Primera parada — lugar real en Chihuahua + por que]\n"
+                    "2. [Segunda parada — restaurante especifico + que pedir]\n"
+                    "3. [Tercer momento — actividad, brindis, detalle especial]\n\n"
+                    "Toque especial: [algo que haga el plan memorable, sencillo pero diferente]\n"
+                    "Presupuesto aprox: [rango en pesos]\n\n"
+                    "Que los lugares sean reales en Chihuahua. Sin asteriscos."
+                )
+            }],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude generar el plan. Intenta de nuevo."
+
+
+async def idea_cita(ocasion: str) -> str:
+    return await asyncio.to_thread(_idea_cita_sync, ocasion)
