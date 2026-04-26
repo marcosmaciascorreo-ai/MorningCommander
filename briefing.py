@@ -71,18 +71,22 @@ RSS_FEEDS_CHI = [
 
 def _get_clima_3dias_sync() -> list[dict]:
     try:
+        # Solicitar ambos nombres de campo (API antigua y nueva)
         url = (
             f"https://api.open-meteo.com/v1/forecast"
             f"?latitude={CIUDAD_LAT}&longitude={CIUDAD_LON}"
-            f"&daily=temperature_2m_max,temperature_2m_min,weathercode"
+            f"&daily=temperature_2m_max,temperature_2m_min,weather_code,weathercode"
             f"&hourly=relativehumidity_2m,windspeed_10m"
             f"&timezone=America%2FChihuahua"
             f"&forecast_days=3"
         )
-        resp = requests.get(url, timeout=5)
+        resp = requests.get(url, timeout=10)
         resp.raise_for_status()
         data  = resp.json()
         daily = data["daily"]
+
+        # Soporte para campo renombrado en la API de Open-Meteo
+        wcodes_raw = daily.get("weather_code") or daily.get("weathercode") or []
 
         hourly_hum  = data.get("hourly", {}).get("relativehumidity_2m", [])
         hourly_wind = data.get("hourly", {}).get("windspeed_10m", [])
@@ -91,7 +95,7 @@ def _get_clima_3dias_sync() -> list[dict]:
 
         dias = []
         for i in range(3):
-            wcode = int(daily["weathercode"][i])
+            wcode = int(wcodes_raw[i]) if i < len(wcodes_raw) else 0
             dias.append({
                 "temp_min":  round(daily["temperature_2m_min"][i]),
                 "temp_max":  round(daily["temperature_2m_max"][i]),
@@ -102,7 +106,9 @@ def _get_clima_3dias_sync() -> list[dict]:
                 "ok":        True,
             })
         return dias
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Error clima: {e}")
         fallback = {"temp_min": "--", "temp_max": "--", "condicion": "No disponible",
                     "emoji": "🌡️", "humedad": 0, "viento": 0, "ok": False}
         return [fallback, fallback, fallback]
@@ -112,7 +118,7 @@ def _get_clima_3dias_sync() -> list[dict]:
 
 def _get_tipo_cambio_sync() -> dict:
     try:
-        resp = requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=5)
+        resp = requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=10)
         resp.raise_for_status()
         rates      = resp.json()["rates"]
         mxn        = float(rates.get("MXN", 0))

@@ -3,6 +3,7 @@ bot.py — Morning Commander · Bot personal de Telegram
 """
 
 import logging
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -60,12 +61,13 @@ AYUDA_TEXTO = (
     "/finde        — Que hacer este fin de semana en Chihuahua\n"
     "/hora         — Cambiar hora del briefing manana\n"
     "/config_cal   — Conectar Google Calendar (iCal)\n"
+    "/estado       — Ver estado del scheduler\n"
     "/ayuda        — Ver este mensaje"
 )
 
 # ── /start ────────────────────────────────────────────────────────────────────
 
-async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     if MY_ID == 0:
@@ -91,7 +93,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── /ayuda ────────────────────────────────────────────────────────────────────
 
-async def cmd_ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_ayuda(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     if not is_me(update):
         await deny(update)
         return
@@ -99,7 +101,7 @@ async def cmd_ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── /briefing ─────────────────────────────────────────────────────────────────
 
-async def cmd_briefing(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_briefing(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     if not is_me(update):
         await deny(update)
         return
@@ -109,11 +111,11 @@ async def cmd_briefing(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(mensaje)
     except Exception as e:
         logger.error(f"Error en /briefing: {e}")
-        await update.message.reply_text("Error generando el briefing. Revisa los logs.")
+        await update.message.reply_text(f"Error generando el briefing: {e}")
 
 # ── /tarde ────────────────────────────────────────────────────────────────────
 
-async def cmd_tarde(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_tarde(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     if not is_me(update):
         await deny(update)
         return
@@ -123,7 +125,7 @@ async def cmd_tarde(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(mensaje)
     except Exception as e:
         logger.error(f"Error en /tarde: {e}")
-        await update.message.reply_text("Error generando el resumen.")
+        await update.message.reply_text(f"Error generando el resumen: {e}")
 
 # ── /tarea ────────────────────────────────────────────────────────────────────
 
@@ -141,7 +143,7 @@ async def cmd_tarea_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Que tarea quieres agregar?")
     return WAITING_TASK
 
-async def cmd_tarea_recibir(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_tarea_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     texto = update.message.text.strip()
     if texto:
         db.agregar_tarea(texto)
@@ -152,7 +154,7 @@ async def cmd_tarea_recibir(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── /tareas ───────────────────────────────────────────────────────────────────
 
-async def cmd_tareas(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_tareas(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     if not is_me(update):
         await deny(update)
         return
@@ -181,19 +183,19 @@ async def _mostrar_menu_tareas(update: Update, accion: str):
     texto = "Cual tarea completaste?" if accion == "hecho" else "Cual tarea quieres eliminar?"
     await update.message.reply_text(texto, reply_markup=InlineKeyboardMarkup(keyboard))
 
-async def cmd_hecho(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_hecho(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     if not is_me(update):
         await deny(update)
         return
     await _mostrar_menu_tareas(update, "hecho")
 
-async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_borrar(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     if not is_me(update):
         await deny(update)
         return
     await _mostrar_menu_tareas(update, "borrar")
 
-async def callback_tareas(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def callback_tareas(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
@@ -236,7 +238,7 @@ async def cmd_sap_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return WAITING_SAP
 
-async def cmd_sap_recibir(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_sap_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     descripcion = update.message.text.strip()
     await update.message.reply_text("Consultando...")
     respuesta = await features_module.consulta_sap_excel(descripcion)
@@ -245,7 +247,7 @@ async def cmd_sap_recibir(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── /podcast ──────────────────────────────────────────────────────────────────
 
-async def cmd_podcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_podcast(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     if not is_me(update):
         await deny(update)
         return
@@ -269,7 +271,7 @@ async def cmd_finde(update: Update, _context: ContextTypes.DEFAULT_TYPE):
 
 # ── /hora ─────────────────────────────────────────────────────────────────────
 
-async def cmd_hora_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_hora_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     if not is_me(update):
         await deny(update)
         return ConversationHandler.END
@@ -281,7 +283,7 @@ async def cmd_hora_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return WAITING_HOUR
 
-async def cmd_hora_recibir(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_hora_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     texto = update.message.text.strip()
     try:
         h, m = texto.split(":")
@@ -331,13 +333,51 @@ async def cmd_config_cal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Google Calendar conectado. El briefing de manana incluira tus eventos."
     )
 
+# ── /estado ───────────────────────────────────────────────────────────────────
+
+async def cmd_estado(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return
+
+    hora_m = db.get_config("hora_envio",      HORA_ENVIO)
+    hora_t = db.get_config("hora_envio_tarde", HORA_ENVIO_TARDE)
+    ical   = db.get_config("ical_url", "")
+    ahora  = datetime.now().strftime("%H:%M:%S")
+
+    # Proxima ejecucion desde el scheduler
+    def next_run(job_id: str) -> str:
+        job = sched_module.scheduler.get_job(job_id)
+        if job and job.next_run_time:
+            return job.next_run_time.strftime("%Y-%m-%d %H:%M")
+        return "No programado"
+
+    manana_next = next_run("briefing_manana")
+    tarde_next  = next_run("briefing_tarde")
+
+    lineas = [
+        "ESTADO DEL BOT",
+        "",
+        f"Hora actual servidor: {ahora}",
+        f"Scheduler activo: {'Si' if sched_module.scheduler.running else 'NO'}",
+        "",
+        f"Briefing manana ({hora_m})",
+        f"  Proxima vez: {manana_next}",
+        "",
+        f"Resumen tarde ({hora_t})",
+        f"  Proxima vez: {tarde_next}",
+        "",
+        f"Google Calendar: {'Conectado' if ical else 'No configurado'}",
+    ]
+    await update.message.reply_text("\n".join(lineas))
+
 # ── CANCELAR ──────────────────────────────────────────────────────────────────
 
-async def cmd_cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_cancelar(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Operacion cancelada.")
     return ConversationHandler.END
 
-async def cmd_unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_unknown(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     if not is_me(update):
         await deny(update)
         return
@@ -354,6 +394,13 @@ async def _enviar_briefing_manana():
         logger.info("Briefing matutino enviado.")
     except Exception as e:
         logger.error(f"Error enviando briefing manana: {e}")
+        try:
+            await _app.bot.send_message(
+                chat_id=MY_ID,
+                text=f"Error en el briefing matutino: {e}\nUsa /briefing para reintentarlo."
+            )
+        except Exception:
+            pass
 
 async def _enviar_briefing_tarde():
     if _app is None:
@@ -364,6 +411,13 @@ async def _enviar_briefing_tarde():
         logger.info("Briefing vespertino enviado.")
     except Exception as e:
         logger.error(f"Error enviando briefing tarde: {e}")
+        try:
+            await _app.bot.send_message(
+                chat_id=MY_ID,
+                text=f"Error en el resumen vespertino: {e}\nUsa /tarde para reintentarlo."
+            )
+        except Exception:
+            pass
 
 # ── POST INIT ─────────────────────────────────────────────────────────────────
 
@@ -430,6 +484,7 @@ def main():
     app.add_handler(CommandHandler("podcast",    cmd_podcast))
     app.add_handler(CommandHandler("finde",      cmd_finde))
     app.add_handler(CommandHandler("config_cal", cmd_config_cal))
+    app.add_handler(CommandHandler("estado",     cmd_estado))
     app.add_handler(tarea_conv)
     app.add_handler(hora_conv)
     app.add_handler(sap_conv)
