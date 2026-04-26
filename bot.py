@@ -41,6 +41,7 @@ WAITING_CIUDAD       = 6
 WAITING_MOTIVACION   = 7
 WAITING_PLAYLIST     = 8
 WAITING_CITA         = 9
+WAITING_CONTRAPUNTO  = 10
 
 # ── REFERENCIA GLOBAL ─────────────────────────────────────────────────────────
 
@@ -85,6 +86,9 @@ AYUDA_TEXTO = (
     "/clima_viaje  → Clima de cualquier ciudad antes de viajar\n"
     "/podcast      → Podcast recomendado con link directo a Spotify\n"
     "/playlist     → 10 canciones para lo que vayas a hacer (con links)\n\n"
+
+    "🧠 ASISTENTE\n"
+    "/contrapunto  → Das tu posicion y el bot construye el mejor argumento en contra\n\n"
 
     "💼 TRABAJO\n"
     "/sap          → Que transaccion de SAP usar y como ejecutarla\n\n"
@@ -573,6 +577,26 @@ async def cmd_estado(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text("\n".join(lineas))
 
+# ── /contrapunto ──────────────────────────────────────────────────────────────
+
+async def cmd_contrapunto_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "Cual es tu posicion o decision?\n\n"
+        "Ejemplos: quiero renunciar a mi trabajo, creo que debo comprar carro nuevo, "
+        "pienso que mi socio esta equivocado, voy a invertir en X"
+    )
+    return WAITING_CONTRAPUNTO
+
+async def cmd_contrapunto_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    posicion = update.message.text.strip()
+    await update.message.reply_text("Construyendo el mejor argumento en contra...")
+    resultado = await features_module.contrapunto(posicion)
+    await update.message.reply_text(resultado)
+    return ConversationHandler.END
+
 # ── CANCELAR ──────────────────────────────────────────────────────────────────
 
 async def cmd_cancelar(update: Update, _context: ContextTypes.DEFAULT_TYPE):
@@ -692,6 +716,11 @@ def main():
         states={WAITING_CITA: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_cita_recibir)]},
         fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
     )
+    contrapunto_conv = ConversationHandler(
+        entry_points=[CommandHandler("contrapunto", cmd_contrapunto_start)],
+        states={WAITING_CONTRAPUNTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_contrapunto_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
 
     # Handlers simples
     app.add_handler(CommandHandler("start",        cmd_start))
@@ -721,6 +750,7 @@ def main():
     app.add_handler(clima_viaje_conv)
     app.add_handler(playlist_conv)
     app.add_handler(cita_conv)
+    app.add_handler(contrapunto_conv)
 
     app.add_handler(CallbackQueryHandler(callback_tareas))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_unknown))

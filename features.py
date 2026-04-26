@@ -698,3 +698,40 @@ def _idea_cita_sync(ocasion: str) -> str:
 
 async def idea_cita(ocasion: str) -> str:
     return await asyncio.to_thread(_idea_cita_sync, ocasion)
+
+
+# ── CONTRAPUNTO ───────────────────────────────────────────────────────────────
+
+def _contrapunto_sync(posicion: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=400,
+            messages=[{
+                "role": "system",
+                "content": (
+                    "Eres un devil's advocate brillante. El usuario te da su posicion o creencia. "
+                    "Tu trabajo es darle el mejor argumento en contra posible, solido y honesto, "
+                    "no para ganar, sino para que el usuario piense mejor antes de actuar o decidir.\n\n"
+                    "Estructura:\n"
+                    "EL ARGUMENTO CONTRARIO\n"
+                    "[El punto mas fuerte en contra, bien desarrollado]\n\n"
+                    "LO QUE NO ESTAS CONSIDERANDO\n"
+                    "[1-2 puntos ciegos frecuentes en esta posicion]\n\n"
+                    "PREGUNTA INCOMODA\n"
+                    "[Una sola pregunta que ponga a prueba la posicion]\n\n"
+                    "Responde en espanol. Sin asteriscos. Directo y sin rodeos."
+                ),
+            }, {
+                "role": "user",
+                "content": posicion,
+            }],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude generar el contrapunto. Intenta de nuevo."
+
+
+async def contrapunto(posicion: str) -> str:
+    return await asyncio.to_thread(_contrapunto_sync, posicion)
