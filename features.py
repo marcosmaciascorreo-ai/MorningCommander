@@ -1,10 +1,11 @@
 """
 features.py — Funcionalidades adicionales de Morning Commander
-- Asistente SAP/Excel para maquiladora
-- Recomendaciones de podcasts entretenidos
 """
 
 import asyncio
+import re
+import requests
+from datetime import date
 from openai import OpenAI
 from config import OPENAI_API_KEY
 
@@ -47,7 +48,6 @@ async def consulta_sap_excel(descripcion: str) -> str:
 
 # ── RECOMENDACIONES DE PODCASTS ───────────────────────────────────────────────
 
-# Catalogo curado con links verificados (Spotify direct o search)
 PODCASTS_CURADOS = [
     {
         "nombre": "Leyendas Legendarias",
@@ -131,7 +131,6 @@ def _recomendar_podcasts_sync() -> str:
         )
         gpt_text = response.choices[0].message.content.strip()
 
-        # Adjuntar links del catalogo a los nombres que aparezcan en la respuesta
         links_agregados = set()
         lineas_con_links = []
         for linea in gpt_text.splitlines():
@@ -157,7 +156,6 @@ async def recomendar_podcasts() -> str:
 def _actividades_finde_sync() -> str:
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
-        from datetime import date
         hoy = date.today()
         dias = {0: "lunes", 1: "martes", 2: "miercoles", 3: "jueves",
                 4: "viernes", 5: "sabado", 6: "domingo"}
@@ -193,3 +191,445 @@ def _actividades_finde_sync() -> str:
 
 async def actividades_finde() -> str:
     return await asyncio.to_thread(_actividades_finde_sync)
+
+
+# ── RECOMENDACION DE SERIE / PELICULA ─────────────────────────────────────────
+
+def _recomendar_serie_sync(estado_animo: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=500,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"El usuario esta de humor: {estado_animo}\n\n"
+                    "Recomienda 3 series o peliculas que esten disponibles hoy en "
+                    "Netflix, HBO Max, Disney+ o Prime Video en Mexico.\n\n"
+                    "Formato por recomendacion (sin asteriscos):\n"
+                    "TITULO (Plataforma)\n"
+                    "Genero: [genero]\n"
+                    "Por que verla ahora: [1 linea que conecte con el estado de animo]\n"
+                    "Temporadas/duracion: [dato util]\n\n"
+                    "Elige cosas que realmente esten disponibles en Mexico. "
+                    "Mezcla series y peliculas. Sin introduccion ni cierre."
+                )
+            }],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude generar recomendaciones. Intenta de nuevo."
+
+
+async def recomendar_serie(estado_animo: str) -> str:
+    return await asyncio.to_thread(_recomendar_serie_sync, estado_animo)
+
+
+# ── RECETA RAPIDA ─────────────────────────────────────────────────────────────
+
+def _sugerir_receta_sync(ingredientes: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=500,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Ingredientes disponibles: {ingredientes}\n\n"
+                    "Sugiere 1 receta rapida (menos de 30 minutos) que se pueda hacer con eso. "
+                    "Puede agregar sal, aceite, ajo, cebolla y condimentos basicos si los necesita.\n\n"
+                    "Formato:\n"
+                    "NOMBRE DEL PLATILLO\n"
+                    "Tiempo: [minutos]\n"
+                    "Ingredientes: [lista en una linea]\n"
+                    "Pasos:\n"
+                    "1. ...\n"
+                    "2. ...\n"
+                    "Tip: [consejo del chef en 1 linea]\n\n"
+                    "Sin asteriscos ni markdown."
+                )
+            }],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude generar la receta. Intenta de nuevo."
+
+
+async def sugerir_receta(ingredientes: str) -> str:
+    return await asyncio.to_thread(_sugerir_receta_sync, ingredientes)
+
+
+# ── CHISTE DEL DIA ────────────────────────────────────────────────────────────
+
+def _chiste_del_dia_sync() -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        hoy = date.today().strftime("%Y-%m-%d")
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=150,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Fecha: {hoy}. Cuentame un chiste corto y gracioso, "
+                    "estilo mexicano o de cultura latina. "
+                    "Que sea limpio pero con algo de picardía. "
+                    "Solo el chiste, sin comentarios ni explicaciones."
+                )
+            }],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "Por que los programadores usan lentes? Porque no pueden C#. (Error generando chiste.)"
+
+
+async def chiste_del_dia() -> str:
+    return await asyncio.to_thread(_chiste_del_dia_sync)
+
+
+# ── MENSAJE MOTIVACIONAL ──────────────────────────────────────────────────────
+
+def _frase_motivacional_sync(contexto: str = "") -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        extra = f"El usuario dice: {contexto}\n\n" if contexto else ""
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=200,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"{extra}"
+                    "Da un mensaje motivacional corto y directo para alguien que trabaja "
+                    "en finanzas en una maquiladora en Chihuahua, Mexico. "
+                    "Que sea real y humano, no un poster de LinkedIn. "
+                    "Maximo 4 lineas. Sin asteriscos."
+                )
+            }],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "El mejor momento para empezar fue ayer. El segundo mejor es ahora."
+
+
+async def frase_motivacional(contexto: str = "") -> str:
+    return await asyncio.to_thread(_frase_motivacional_sync, contexto)
+
+
+# ── CLIMA DE OTRA CIUDAD ──────────────────────────────────────────────────────
+
+WEATHERCODES_ES = {
+    0: "Despejado", 1: "Mayormente despejado", 2: "Parcialmente nublado", 3: "Nublado",
+    45: "Niebla", 48: "Niebla con escarcha",
+    51: "Llovizna", 53: "Llovizna", 55: "Llovizna intensa",
+    61: "Lluvia ligera", 63: "Lluvia", 65: "Lluvia intensa",
+    71: "Nieve", 73: "Nieve", 75: "Nieve intensa",
+    80: "Chubascos", 81: "Chubascos", 82: "Chubascos fuertes",
+    95: "Tormenta", 99: "Tormenta con granizo",
+}
+WEATHER_EMOJIS = {
+    0: "☀️", 1: "🌤️", 2: "⛅", 3: "☁️",
+    45: "🌫️", 48: "🌫️",
+    51: "🌦️", 53: "🌦️", 55: "🌦️",
+    61: "🌧️", 63: "🌧️", 65: "🌧️",
+    71: "🌨️", 73: "🌨️", 75: "🌨️",
+    80: "🌦️", 81: "🌦️", 82: "🌦️",
+    95: "⛈️", 99: "⛈️",
+}
+DIAS_ES = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
+
+
+def _clima_ciudad_sync(ciudad: str) -> str:
+    try:
+        # Paso 1: geocodificar
+        geo = requests.get(
+            "https://geocoding-api.open-meteo.com/v1/search",
+            params={"name": ciudad, "count": 1, "language": "es", "format": "json"},
+            timeout=8,
+        )
+        geo.raise_for_status()
+        resultados = geo.json().get("results", [])
+        if not resultados:
+            return f"No encontre la ciudad '{ciudad}'. Intenta con otro nombre."
+
+        r      = resultados[0]
+        lat    = r["latitude"]
+        lon    = r["longitude"]
+        nombre = r.get("name", ciudad)
+        pais   = r.get("country", "")
+        estado = r.get("admin1", "")
+        lugar  = f"{nombre}, {estado}, {pais}".strip(", ")
+
+        # Paso 2: pronostico 3 dias
+        weather = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude":  lat,
+                "longitude": lon,
+                "daily":     "temperature_2m_max,temperature_2m_min,weather_code,weathercode",
+                "timezone":  "auto",
+                "forecast_days": 3,
+            },
+            timeout=10,
+        )
+        weather.raise_for_status()
+        data  = weather.json()
+        daily = data["daily"]
+        wcs   = daily.get("weather_code") or daily.get("weathercode") or []
+        fechas = daily.get("time", [])
+
+        lineas = [f"CLIMA EN {lugar.upper()}", ""]
+        for i in range(min(3, len(fechas))):
+            wc    = int(wcs[i]) if i < len(wcs) else 0
+            tmin  = round(daily["temperature_2m_min"][i])
+            tmax  = round(daily["temperature_2m_max"][i])
+            cond  = WEATHERCODES_ES.get(wc, "Variable")
+            emoji = WEATHER_EMOJIS.get(wc, "🌡️")
+            from datetime import datetime as _dt
+            fecha = _dt.fromisoformat(fechas[i])
+            dia   = DIAS_ES[fecha.weekday()]
+            etiq  = "Hoy  " if i == 0 else (f"{dia}  " if i == 1 else f"{dia}  ")
+            lineas.append(f"{etiq} {emoji} {tmin}°→{tmax}°  {cond}")
+
+        return "\n".join(lineas)
+
+    except Exception as e:
+        return f"No pude obtener el clima de '{ciudad}'. ({e})"
+
+
+async def clima_ciudad(ciudad: str) -> str:
+    return await asyncio.to_thread(_clima_ciudad_sync, ciudad)
+
+
+# ── PRECIO DE GASOLINA EN CHIHUAHUA ──────────────────────────────────────────
+
+def _precio_gasolina_sync() -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        hoy = date.today().strftime("%d de %B de %Y")
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=200,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Fecha de hoy: {hoy}.\n\n"
+                    "Cual es el precio maximo por litro de gasolina en Chihuahua, Mexico "
+                    "esta semana? Los precios los fija SHCP semanalmente.\n\n"
+                    "Da los precios de:\n"
+                    "- Magna (regular)\n"
+                    "- Premium\n"
+                    "- Diesel\n\n"
+                    "Formato:\n"
+                    "Magna:   $XX.XX / litro\n"
+                    "Premium: $XX.XX / litro\n"
+                    "Diesel:  $XX.XX / litro\n\n"
+                    "Al final agrega: 'Precio maximo oficial SHCP. Verifica en: gob.mx/shcp'\n"
+                    "Sin asteriscos. Sin explicaciones largas."
+                )
+            }],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude obtener el precio. Consulta el precio oficial en: gob.mx/shcp"
+
+
+async def precio_gasolina() -> str:
+    return await asyncio.to_thread(_precio_gasolina_sync)
+
+
+# ── RESTAURANTE EN CHIHUAHUA ──────────────────────────────────────────────────
+
+RESTAURANTES_CHI = [
+    {"nombre": "La Casona",           "tipo": "Comida mexicana tradicional",      "zona": "Centro historico"},
+    {"nombre": "Los Milagros",        "tipo": "Carnes y asados chihuahuenses",    "zona": "Zona Dorada"},
+    {"nombre": "El Parral",           "tipo": "Platillos tipicos del norte",      "zona": "Centro"},
+    {"nombre": "La Fazenda",          "tipo": "Churrasco brasileno",              "zona": "Periférico de la Juventud"},
+    {"nombre": "Luther's BBQ",        "tipo": "Carnes ahumadas estilo americano", "zona": "Zona Dorada"},
+    {"nombre": "Pangea",              "tipo": "Cocina de autor, fusion",          "zona": "Colonia Cuauhtemoc"},
+    {"nombre": "Baikal",              "tipo": "Cocina internacional, mariscos",   "zona": "Colonia Magisterial"},
+    {"nombre": "Tony Roma's",         "tipo": "Ribs y carnes americanas",         "zona": "Plaza Sendero"},
+    {"nombre": "Casa Chueco",         "tipo": "Mariscos y caldos",                "zona": "Colonia Cuauhtemoc"},
+    {"nombre": "El Rodeo",            "tipo": "Comida corrida mexicana",          "zona": "Varios en la ciudad"},
+    {"nombre": "Rojo Bistro",         "tipo": "Brunch y cocina mexicana moderna", "zona": "Colonia Magisterial"},
+    {"nombre": "La Parrilla Norteña", "tipo": "Arracheras y cortes norteños",     "zona": "Boulevard Ortiz Mena"},
+    {"nombre": "Samurai",             "tipo": "Sushi y comida japonesa",          "zona": "Zona Dorada"},
+    {"nombre": "Sushito",             "tipo": "Sushi mexicanizado, rolls especiales", "zona": "Colonia Bugambilias"},
+    {"nombre": "El Charco de las Ranas", "tipo": "Mariscos estilo nayarita",      "zona": "Periférico"},
+]
+
+
+def _sugerir_restaurante_sync() -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        hoy = date.today()
+        dias = {0: "lunes", 1: "martes", 2: "miercoles", 3: "jueves",
+                4: "viernes", 5: "sabado", 6: "domingo"}
+        dia = dias[hoy.weekday()]
+
+        catalogo = "\n".join(
+            f'{i+1}. {r["nombre"]} — {r["tipo"]} ({r["zona"]})'
+            for i, r in enumerate(RESTAURANTES_CHI)
+        )
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=250,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Hoy es {dia}. Elige 1 restaurante de esta lista para recomendar hoy "
+                    f"a alguien en Chihuahua.\n\n"
+                    f"LISTA:\n{catalogo}\n\n"
+                    "Formato:\n"
+                    "NOMBRE DEL RESTAURANTE\n"
+                    "Tipo: [tipo de cocina]\n"
+                    "Zona: [ubicacion]\n"
+                    "Por que hoy: [1 linea convincente]\n"
+                    "Pide: [platillo especifico que debes ordenar]\n\n"
+                    "Sin asteriscos. Solo el bloque del restaurante elegido."
+                )
+            }],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude generar la sugerencia. Intenta de nuevo."
+
+
+async def sugerir_restaurante() -> str:
+    return await asyncio.to_thread(_sugerir_restaurante_sync)
+
+
+# ── EVENTOS EN CHIHUAHUA ──────────────────────────────────────────────────────
+
+_RSS_CHI_EVENTOS = [
+    "https://www.nortedigital.mx/feed/",
+    "https://www.elheraldodechihuahua.com.mx/rss",
+]
+
+_PALABRAS_EVENTO = [
+    "festival", "concierto", "expo", "feria", "evento", "obra", "teatro",
+    "exposicion", "inauguracion", "temporada", "torneo", "carrera", "funcion",
+    "muestra", "presentacion", "taller", "conferencia",
+]
+
+
+def _clean(text: str) -> str:
+    text = re.sub(r"<[^>]+>", "", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _eventos_chihuahua_sync() -> str:
+    titulares = []
+    for url in _RSS_CHI_EVENTOS:
+        try:
+            import feedparser
+            resp = requests.get(url, timeout=8)
+            resp.raise_for_status()
+            feed = feedparser.parse(resp.content)
+            for entry in feed.entries[:15]:
+                titulo = _clean(entry.get("title", ""))
+                if any(p in titulo.lower() for p in _PALABRAS_EVENTO):
+                    titulares.append(titulo)
+        except Exception:
+            continue
+
+    if not titulares:
+        # Sin RSS, usar GPT con conocimiento general
+        try:
+            client = OpenAI(api_key=OPENAI_API_KEY)
+            hoy = date.today()
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                max_tokens=300,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"Mes: {hoy.strftime('%B %Y')}. "
+                        "Sugiere 4 eventos culturales, conciertos o actividades que "
+                        "suelen ocurrir en Chihuahua en esta epoca del año. "
+                        "Que sean tipicos y reales (Feria de Santa Rita, eventos del ICHICULT, "
+                        "Teatro de los Heroes, etc.). "
+                        "Formato: una linea por evento. Sin asteriscos."
+                    )
+                }],
+            )
+            return "EVENTOS EN CHIHUAHUA (sugerencias tipicas de la temporada)\n\n" + response.choices[0].message.content.strip()
+        except Exception:
+            return "No encontre eventos. Consulta la pagina del ICHICULT o Norte Digital."
+
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        texto = "\n".join(titulares[:10])
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=300,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Estos son titulares de noticias de Chihuahua sobre eventos:\n{texto}\n\n"
+                    "Resume los 4 mas relevantes. Formato: una linea por evento. "
+                    "Si no hay suficiente info, di 'Ver detalles en Norte Digital'. Sin asteriscos."
+                )
+            }],
+        )
+        return "EVENTOS EN CHIHUAHUA\n\n" + response.choices[0].message.content.strip()
+    except Exception:
+        return "EVENTOS EN CHIHUAHUA\n\n" + "\n".join(f"- {t}" for t in titulares[:5])
+
+
+async def eventos_chihuahua() -> str:
+    return await asyncio.to_thread(_eventos_chihuahua_sync)
+
+
+# ── NOTICIAS SOLO CHIHUAHUA ───────────────────────────────────────────────────
+
+_RSS_CHI_NOTICIAS = [
+    "https://www.nortedigital.mx/feed/",
+    "https://www.elheraldodechihuahua.com.mx/rss",
+]
+
+
+def _noticias_chihuahua_sync() -> str:
+    titulares = []
+    for url in _RSS_CHI_NOTICIAS:
+        try:
+            import feedparser
+            resp = requests.get(url, timeout=8)
+            resp.raise_for_status()
+            feed = feedparser.parse(resp.content)
+            for entry in feed.entries[:6]:
+                titulo = _clean(entry.get("title", ""))
+                if titulo:
+                    titulares.append(titulo)
+        except Exception:
+            continue
+
+    if not titulares:
+        return "No se pudieron obtener noticias de Chihuahua en este momento.\nIntenta en: nortedigital.mx"
+
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        texto = "\n".join(titulares[:10])
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=300,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Titulares de noticias locales de Chihuahua:\n{texto}\n\n"
+                    "Selecciona los 5 mas importantes y resumelos en 1 linea cada uno. "
+                    "Prioriza seguridad, gobierno, economia local, eventos. "
+                    "Formato: una linea por noticia con emoji relevante al inicio. Sin asteriscos."
+                )
+            }],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "\n".join(f"- {t}" for t in titulares[:6])
+
+
+async def noticias_chihuahua() -> str:
+    return await asyncio.to_thread(_noticias_chihuahua_sync)

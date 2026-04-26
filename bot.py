@@ -32,9 +32,13 @@ logger = logging.getLogger(__name__)
 
 # ── ESTADOS ───────────────────────────────────────────────────────────────────
 
-WAITING_TASK = 1
-WAITING_HOUR = 2
-WAITING_SAP  = 3
+WAITING_TASK       = 1
+WAITING_HOUR       = 2
+WAITING_SAP        = 3
+WAITING_MOOD       = 4
+WAITING_INGREDIENTES = 5
+WAITING_CIUDAD     = 6
+WAITING_MOTIVACION = 7
 
 # ── REFERENCIA GLOBAL ─────────────────────────────────────────────────────────
 
@@ -50,18 +54,33 @@ async def deny(update: Update):
 
 AYUDA_TEXTO = (
     "COMANDOS DISPONIBLES\n\n"
+    "BRIEFINGS\n"
     "/briefing     — Briefing matutino ahora\n"
     "/tarde        — Resumen vespertino ahora\n"
+    "/estado       — Ver estado del scheduler\n\n"
+    "TAREAS\n"
     "/tarea        — Agregar tarea\n"
     "/tareas       — Ver tareas pendientes\n"
     "/hecho        — Marcar tarea completada\n"
-    "/borrar       — Eliminar tarea\n"
-    "/sap          — Ayuda con SAP o Excel\n"
-    "/podcast      — Recomendaciones de podcasts (con links)\n"
-    "/finde        — Que hacer este fin de semana en Chihuahua\n"
+    "/borrar       — Eliminar tarea\n\n"
+    "CHIHUAHUA\n"
+    "/gasolina     — Precio gasolina en Chihuahua\n"
+    "/restaurante  — Sugerencia de restaurante hoy\n"
+    "/evento       — Que esta pasando en Chihuahua\n"
+    "/noticias_chi — Solo noticias de Chihuahua\n"
+    "/finde        — Planes para el fin de semana\n\n"
+    "ENTRETENIMIENTO\n"
+    "/serie        — Que ver hoy (Netflix, HBO, etc.)\n"
+    "/receta       — Receta con lo que tienes en casa\n"
+    "/chiste       — Chiste del dia\n"
+    "/motivacion   — Mensaje motivacional\n"
+    "/clima_viaje  — Clima de cualquier ciudad\n"
+    "/podcast      — Recomendaciones de podcasts\n\n"
+    "TRABAJO\n"
+    "/sap          — Ayuda con SAP o Excel\n\n"
+    "CONFIGURACION\n"
     "/hora         — Cambiar hora del briefing manana\n"
     "/config_cal   — Conectar Google Calendar (iCal)\n"
-    "/estado       — Ver estado del scheduler\n"
     "/ayuda        — Ver este mensaje"
 )
 
@@ -269,6 +288,139 @@ async def cmd_finde(update: Update, _context: ContextTypes.DEFAULT_TYPE):
         "QUE HACER ESTE FIN DE SEMANA EN CHIHUAHUA\n\n" + sugerencias
     )
 
+# ── /serie ────────────────────────────────────────────────────────────────────
+
+async def cmd_serie_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "Como te sientes hoy?\n\n"
+        "Ejemplos: aburrido, estresado, quiero reir, quiero suspenso, "
+        "romantico, accion, algo raro, lo que sea"
+    )
+    return WAITING_MOOD
+
+async def cmd_serie_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    estado = update.message.text.strip()
+    await update.message.reply_text("Buscando algo para ti...")
+    recomendacion = await features_module.recomendar_serie(estado)
+    await update.message.reply_text("QUE VER HOY\n\n" + recomendacion)
+    return ConversationHandler.END
+
+# ── /receta ───────────────────────────────────────────────────────────────────
+
+async def cmd_receta_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "Que tienes en el refri o la alacena?\n\n"
+        "Escribe los ingredientes separados por coma\n"
+        "Ejemplo: pollo, arroz, jitomate, cebolla"
+    )
+    return WAITING_INGREDIENTES
+
+async def cmd_receta_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    ingredientes = update.message.text.strip()
+    await update.message.reply_text("Revisando que se puede hacer...")
+    receta = await features_module.sugerir_receta(ingredientes)
+    await update.message.reply_text("RECETA RAPIDA\n\n" + receta)
+    return ConversationHandler.END
+
+# ── /chiste ───────────────────────────────────────────────────────────────────
+
+async def cmd_chiste(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return
+    chiste = await features_module.chiste_del_dia()
+    await update.message.reply_text(chiste)
+
+# ── /motivacion ───────────────────────────────────────────────────────────────
+
+async def cmd_motivacion_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+
+    if context.args:
+        contexto = " ".join(context.args).strip()
+        await update.message.reply_text("Un momento...")
+        msg = await features_module.frase_motivacional(contexto)
+        await update.message.reply_text(msg)
+        return ConversationHandler.END
+
+    await update.message.reply_text(
+        "Escribe como te sientes o que esta pasando (o /cancelar para una frase generica):"
+    )
+    return WAITING_MOTIVACION
+
+async def cmd_motivacion_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    contexto = update.message.text.strip()
+    msg = await features_module.frase_motivacional(contexto)
+    await update.message.reply_text(msg)
+    return ConversationHandler.END
+
+# ── /clima_viaje ──────────────────────────────────────────────────────────────
+
+async def cmd_clima_viaje_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "A que ciudad quieres ver el clima?\n\n"
+        "Escribe el nombre (puede ser cualquier ciudad del mundo):"
+    )
+    return WAITING_CIUDAD
+
+async def cmd_clima_viaje_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    ciudad = update.message.text.strip()
+    await update.message.reply_text(f"Buscando clima para {ciudad}...")
+    resultado = await features_module.clima_ciudad(ciudad)
+    await update.message.reply_text(resultado)
+    return ConversationHandler.END
+
+# ── /gasolina ─────────────────────────────────────────────────────────────────
+
+async def cmd_gasolina(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return
+    await update.message.reply_text("Consultando precio de gasolina en Chihuahua...")
+    resultado = await features_module.precio_gasolina()
+    await update.message.reply_text("GASOLINA CHIHUAHUA\n\n" + resultado)
+
+# ── /restaurante ──────────────────────────────────────────────────────────────
+
+async def cmd_restaurante(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return
+    await update.message.reply_text("Eligiendo restaurante para hoy...")
+    sugerencia = await features_module.sugerir_restaurante()
+    await update.message.reply_text("RESTAURANTE DEL DIA\n\n" + sugerencia)
+
+# ── /evento ───────────────────────────────────────────────────────────────────
+
+async def cmd_evento(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return
+    await update.message.reply_text("Revisando que hay en Chihuahua...")
+    resultado = await features_module.eventos_chihuahua()
+    await update.message.reply_text(resultado)
+
+# ── /noticias_chi ─────────────────────────────────────────────────────────────
+
+async def cmd_noticias_chi(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return
+    await update.message.reply_text("Cargando noticias de Chihuahua...")
+    noticias = await features_module.noticias_chihuahua()
+    await update.message.reply_text("NOTICIAS CHIHUAHUA\n\n" + noticias)
+
 # ── /hora ─────────────────────────────────────────────────────────────────────
 
 async def cmd_hora_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
@@ -345,7 +497,6 @@ async def cmd_estado(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     ical   = db.get_config("ical_url", "")
     ahora  = datetime.now().strftime("%H:%M:%S")
 
-    # Proxima ejecucion desde el scheduler
     def next_run(job_id: str) -> str:
         job = sched_module.scheduler.get_job(job_id)
         if job and job.next_run_time:
@@ -444,50 +595,70 @@ def main():
 
     app = Application.builder().token(TOKEN).post_init(post_init).build()
 
-    # ConversationHandler /tarea
+    # Conversation handlers
     tarea_conv = ConversationHandler(
         entry_points=[CommandHandler("tarea", cmd_tarea_start)],
         states={WAITING_TASK: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_tarea_recibir)]},
-        fallbacks=[
-            CommandHandler("cancelar", cmd_cancelar),
-            MessageHandler(filters.COMMAND, cmd_cancelar),
-        ],
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
     )
-
-    # ConversationHandler /hora
     hora_conv = ConversationHandler(
         entry_points=[CommandHandler("hora", cmd_hora_start)],
         states={WAITING_HOUR: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_hora_recibir)]},
-        fallbacks=[
-            CommandHandler("cancelar", cmd_cancelar),
-            MessageHandler(filters.COMMAND, cmd_cancelar),
-        ],
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
     )
-
-    # ConversationHandler /sap
     sap_conv = ConversationHandler(
         entry_points=[CommandHandler("sap", cmd_sap_start)],
         states={WAITING_SAP: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_sap_recibir)]},
-        fallbacks=[
-            CommandHandler("cancelar", cmd_cancelar),
-            MessageHandler(filters.COMMAND, cmd_cancelar),
-        ],
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
+    serie_conv = ConversationHandler(
+        entry_points=[CommandHandler("serie", cmd_serie_start)],
+        states={WAITING_MOOD: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_serie_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
+    receta_conv = ConversationHandler(
+        entry_points=[CommandHandler("receta", cmd_receta_start)],
+        states={WAITING_INGREDIENTES: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_receta_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
+    motivacion_conv = ConversationHandler(
+        entry_points=[CommandHandler("motivacion", cmd_motivacion_start)],
+        states={WAITING_MOTIVACION: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_motivacion_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
+    clima_viaje_conv = ConversationHandler(
+        entry_points=[CommandHandler("clima_viaje", cmd_clima_viaje_start)],
+        states={WAITING_CIUDAD: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_clima_viaje_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
     )
 
-    app.add_handler(CommandHandler("start",      cmd_start))
-    app.add_handler(CommandHandler("ayuda",      cmd_ayuda))
-    app.add_handler(CommandHandler("briefing",   cmd_briefing))
-    app.add_handler(CommandHandler("tarde",      cmd_tarde))
-    app.add_handler(CommandHandler("tareas",     cmd_tareas))
-    app.add_handler(CommandHandler("hecho",      cmd_hecho))
-    app.add_handler(CommandHandler("borrar",     cmd_borrar))
-    app.add_handler(CommandHandler("podcast",    cmd_podcast))
-    app.add_handler(CommandHandler("finde",      cmd_finde))
-    app.add_handler(CommandHandler("config_cal", cmd_config_cal))
-    app.add_handler(CommandHandler("estado",     cmd_estado))
+    # Handlers simples
+    app.add_handler(CommandHandler("start",        cmd_start))
+    app.add_handler(CommandHandler("ayuda",        cmd_ayuda))
+    app.add_handler(CommandHandler("briefing",     cmd_briefing))
+    app.add_handler(CommandHandler("tarde",        cmd_tarde))
+    app.add_handler(CommandHandler("tareas",       cmd_tareas))
+    app.add_handler(CommandHandler("hecho",        cmd_hecho))
+    app.add_handler(CommandHandler("borrar",       cmd_borrar))
+    app.add_handler(CommandHandler("podcast",      cmd_podcast))
+    app.add_handler(CommandHandler("finde",        cmd_finde))
+    app.add_handler(CommandHandler("chiste",       cmd_chiste))
+    app.add_handler(CommandHandler("gasolina",     cmd_gasolina))
+    app.add_handler(CommandHandler("restaurante",  cmd_restaurante))
+    app.add_handler(CommandHandler("evento",       cmd_evento))
+    app.add_handler(CommandHandler("noticias_chi", cmd_noticias_chi))
+    app.add_handler(CommandHandler("config_cal",   cmd_config_cal))
+    app.add_handler(CommandHandler("estado",       cmd_estado))
+
+    # Conversation handlers
     app.add_handler(tarea_conv)
     app.add_handler(hora_conv)
     app.add_handler(sap_conv)
+    app.add_handler(serie_conv)
+    app.add_handler(receta_conv)
+    app.add_handler(motivacion_conv)
+    app.add_handler(clima_viaje_conv)
+
     app.add_handler(CallbackQueryHandler(callback_tareas))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_unknown))
 
