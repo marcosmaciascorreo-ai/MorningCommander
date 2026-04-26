@@ -946,3 +946,238 @@ def _analizar_compra_sync(producto: str, contexto: str) -> str:
 
 async def analizar_compra(producto: str, contexto: str) -> str:
     return await asyncio.to_thread(_analizar_compra_sync, producto, contexto)
+
+
+# ── DECIDE ────────────────────────────────────────────────────────────────────
+
+def _decide_sync(dilema: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=450,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un asesor de decisiones. Analiza el dilema del usuario y responde:\n\n"
+                        "PROS DE HACERLO:\n- [punto]\n- [punto]\n\n"
+                        "CONTRAS:\n- [punto]\n- [punto]\n\n"
+                        "LO QUE NO ESTAS CONSIDERANDO:\n[1-2 factores que suelen ignorarse]\n\n"
+                        "RECOMENDACION:\n[tu recomendacion directa y por que]\n\n"
+                        "PREGUNTA CLAVE: [una sola pregunta que si la respondes, la decision se aclara]\n\n"
+                        "Responde en espanol. Sin asteriscos."
+                    ),
+                },
+                {"role": "user", "content": dilema},
+            ],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude analizar el dilema. Intenta de nuevo."
+
+
+async def decide(dilema: str) -> str:
+    return await asyncio.to_thread(_decide_sync, dilema)
+
+
+# ── PREGUNTA LIBRE ────────────────────────────────────────────────────────────
+
+def _pregunta_sync(pregunta: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=400,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un asistente personal inteligente. Responde de forma util, directa "
+                        "y en espanol. Si es pregunta factual: respuesta + contexto relevante. "
+                        "Si es solicitud de ayuda: solucion concreta. Maximo 300 palabras. Sin asteriscos."
+                    ),
+                },
+                {"role": "user", "content": pregunta},
+            ],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude procesar la pregunta. Intenta de nuevo."
+
+
+async def pregunta_libre(pregunta: str) -> str:
+    return await asyncio.to_thread(_pregunta_sync, pregunta)
+
+
+# ── PRECIO JUSTO ──────────────────────────────────────────────────────────────
+
+def _precio_justo_sync(descripcion: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=350,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un experto en precios del mercado mexicano, especialmente Chihuahua. "
+                        "El usuario describe un producto o servicio con su precio. Responde:\n\n"
+                        "PRECIO REFERENCIA:\n[rango tipico en Chihuahua / Mexico]\n\n"
+                        "VEREDICTO: [Barato / Precio justo / Caro / Muy caro]\n\n"
+                        "POR QUE:\n[razon en 2-3 lineas]\n\n"
+                        "CONSEJO:\n[como conseguir mejor precio o si vale la pena pagar mas]\n\n"
+                        "Sin asteriscos."
+                    ),
+                },
+                {"role": "user", "content": descripcion},
+            ],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude evaluar el precio. Intenta de nuevo."
+
+
+async def precio_justo(descripcion: str) -> str:
+    return await asyncio.to_thread(_precio_justo_sync, descripcion)
+
+
+# ── APRENDE ───────────────────────────────────────────────────────────────────
+
+def _aprende_sync(tema: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=400,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un maestro que explica cualquier tema en 5 minutos a alguien "
+                        "inteligente pero sin conocimiento previo. Estructura:\n\n"
+                        "QUE ES\n[una oracion sin jerigonza]\n\n"
+                        "POR QUE IMPORTA\n[por que deberia interesarte en la vida real]\n\n"
+                        "COMO FUNCIONA\n[explicacion central con analogia cotidiana]\n\n"
+                        "LO MAS IMPORTANTE\n[el concepto clave que si entiendes, entiendes todo]\n\n"
+                        "CURIOSIDAD\n[dato sorprendente o no obvio]\n\n"
+                        "Maximo 250 palabras. Sin asteriscos."
+                    ),
+                },
+                {"role": "user", "content": tema},
+            ],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude explicar el tema. Intenta de nuevo."
+
+
+async def aprende(tema: str) -> str:
+    return await asyncio.to_thread(_aprende_sync, tema)
+
+
+# ── EMPIEZA ───────────────────────────────────���───────────────────────────────
+
+def _empieza_sync(tarea: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=250,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un coach de productividad. El usuario tiene una tarea que no quiere empezar. "
+                        "Tu unico objetivo: darle los proximos 5 minutos SOLAMENTE. "
+                        "Sin motivacion, sin discursos. Solo pasos tan concretos y pequenos "
+                        "que sea imposible decir que no.\n\n"
+                        "PROXIMOS 5 MINUTOS:\n"
+                        "1. [instruccion tan especifica que no requiere ninguna decision]\n"
+                        "2. [siguiente micro-paso]\n"
+                        "3. [opcional si aplica]\n\n"
+                        "REGLA: Solo haz esto por ahora. En 5 minutos decides si sigues.\n\n"
+                        "Sin asteriscos. Sin motivacion. Solo el primer paso."
+                    ),
+                },
+                {"role": "user", "content": tarea},
+            ],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude generar el primer paso. Intenta de nuevo."
+
+
+async def empieza(tarea: str) -> str:
+    return await asyncio.to_thread(_empieza_sync, tarea)
+
+
+# ── REGALO ──────────────────────────────────────────────────────────────────��─
+
+def _regalo_sync(descripcion: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=500,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un experto en regalos con conocimiento del mercado mexicano. "
+                        "Da 5 ideas especificas y variadas (algo practico, algo experiencia, "
+                        "algo personal, algo sorpresa).\n\n"
+                        "Formato por regalo:\n"
+                        "[numero]. [Nombre del regalo]\n"
+                        "Por que: [razon especifica para ESTA persona]\n"
+                        "Donde: [tienda en Mexico o Amazon MX]\n"
+                        "Precio aprox: $X - $Y MXN\n\n"
+                        "Sin asteriscos."
+                    ),
+                },
+                {"role": "user", "content": descripcion},
+            ],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude generar ideas de regalo. Intenta de nuevo."
+
+
+async def regalo(descripcion: str) -> str:
+    return await asyncio.to_thread(_regalo_sync, descripcion)
+
+
+# ── SEGUIMIENTO ───────────────────────────────────────────────────────────────
+
+def _seguimiento_sync(contexto: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=350,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un experto en comunicacion. El usuario necesita hacer seguimiento "
+                        "a alguien que no ha respondido. Escribe el mensaje perfecto:\n"
+                        "- Sin sonar molesto ni desesperado\n"
+                        "- Directo y facil de responder\n"
+                        "- Recuerda el contexto sin repetir todo\n"
+                        "- Tono calibrado al contexto descrito\n\n"
+                        "MENSAJE:\n[texto listo para copiar y pegar]\n\n"
+                        "VERSION CORTA:\n[version de 1-2 lineas si prefiere algo mas breve]\n\n"
+                        "Sin asteriscos."
+                    ),
+                },
+                {"role": "user", "content": contexto},
+            ],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude redactar el seguimiento. Intenta de nuevo."
+
+
+async def seguimiento(contexto: str) -> str:
+    return await asyncio.to_thread(_seguimiento_sync, contexto)

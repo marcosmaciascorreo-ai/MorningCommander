@@ -47,6 +47,13 @@ WAITING_AUDIO        = 12
 WAITING_QUE_FALTA    = 13
 WAITING_COMPRA       = 14
 WAITING_COMPRA_CTX   = 15
+WAITING_DECIDE       = 16
+WAITING_PREGUNTA     = 17
+WAITING_PRECIO_JUSTO = 18
+WAITING_APRENDE      = 19
+WAITING_EMPIEZA      = 20
+WAITING_REGALO       = 21
+WAITING_SEGUIMIENTO  = 22
 
 # ── REFERENCIA GLOBAL ─────────────────────────────────────────────────────────
 
@@ -104,9 +111,16 @@ AYUDA_TEXTO = (
     "/minuta       → Audio de junta → acta con acuerdos y pendientes\n\n"
 
     "🧠 ASISTENTE\n"
+    "/pregunta     → Pregunta libre al bot — cualquier tema\n"
+    "/decide       → Describes el dilema → pros, contras y recomendacion\n"
+    "/aprende      → Cualquier tema explicado en 5 minutos\n"
+    "/empieza      → Tarea que no quieres hacer → solo los primeros 5 minutos\n"
+    "/precio_justo → Producto + precio → veredicto del mercado en Chihuahua\n"
+    "/regalo       → Describes a la persona + presupuesto → 5 ideas especificas\n"
+    "/seguimiento  → A quien y por que → mensaje de follow-up listo para enviar\n"
     "/contrapunto  → Das tu posicion → el bot construye el mejor argumento en contra\n"
     "/que_falta    → Describes tu plan → el bot detecta los puntos ciegos\n"
-    "/compra       → Dices que quieres comprar → alternatives, criterios ocultos y recomendacion\n\n"
+    "/compra       → Que quieres comprar → alternativas, criterios ocultos y recomendacion\n\n"
 
     "💼 TRABAJO\n"
     "/sap          → Que transaccion de SAP usar y como ejecutarla\n\n"
@@ -636,6 +650,143 @@ async def cmd_compra_contexto(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(resultado)
     return ConversationHandler.END
 
+# ── /decide ───────────────────────────────────────────────────────────────────
+
+async def cmd_decide_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "Describeme el dilema o decision.\n\n"
+        "Ejemplos: renunciar a mi trabajo actual por una oferta nueva, "
+        "comprar carro o seguir en uber, decirle a mi jefe que no estoy de acuerdo"
+    )
+    return WAITING_DECIDE
+
+async def cmd_decide_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    dilema = update.message.text.strip()
+    await update.message.reply_text("Analizando tu decision...")
+    resultado = await features_module.decide(dilema)
+    await update.message.reply_text(resultado)
+    return ConversationHandler.END
+
+# ── /pregunta ─────────────────────────────────────────────────────────────────
+
+async def cmd_pregunta_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text("Que quieres saber?")
+    return WAITING_PREGUNTA
+
+async def cmd_pregunta_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    pregunta = update.message.text.strip()
+    await update.message.reply_text("Consultando...")
+    resultado = await features_module.pregunta_libre(pregunta)
+    await update.message.reply_text(resultado)
+    return ConversationHandler.END
+
+# ── /precio_justo ─────────────────────────────────────────────────────────────
+
+async def cmd_precio_justo_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "Describeme el producto o servicio con su precio.\n\n"
+        "Ejemplos: cambio de aceite $350, corte de pelo $120, "
+        "renta de oficina $8,000 al mes, plomero cobro $600 por destape"
+    )
+    return WAITING_PRECIO_JUSTO
+
+async def cmd_precio_justo_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    descripcion = update.message.text.strip()
+    await update.message.reply_text("Revisando precio en el mercado...")
+    resultado = await features_module.precio_justo(descripcion)
+    await update.message.reply_text(resultado)
+    return ConversationHandler.END
+
+# ── /aprende ──────────────────────────────────────────────────────────────────
+
+async def cmd_aprende_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "Que quieres aprender o entender?\n\n"
+        "Ejemplos: como funciona la inflacion, que es el blockchain, "
+        "como trabaja el sistema inmune, que es un fondo de inversion"
+    )
+    return WAITING_APRENDE
+
+async def cmd_aprende_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    tema = update.message.text.strip()
+    await update.message.reply_text(f"Preparando explicacion de: {tema}...")
+    resultado = await features_module.aprende(tema)
+    await update.message.reply_text(resultado)
+    return ConversationHandler.END
+
+# ── /empieza ──────────────────────────────────────────────────────────────────
+
+async def cmd_empieza_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "Que tarea no quieres empezar?\n\n"
+        "Ejemplos: el reporte de ventas, limpiar el cuarto, "
+        "responder correos atrasados, hacer la declaracion"
+    )
+    return WAITING_EMPIEZA
+
+async def cmd_empieza_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    tarea = update.message.text.strip()
+    await update.message.reply_text("Calculando tu primer paso...")
+    resultado = await features_module.empieza(tarea)
+    await update.message.reply_text(resultado)
+    return ConversationHandler.END
+
+# ── /regalo ───────────────────────────────────────────────────────────────────
+
+async def cmd_regalo_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "Describeme a la persona y el presupuesto.\n\n"
+        "Ejemplos: mi mama, 60 anos, le gusta cocinar y el jardin, presupuesto $800, "
+        "mi amigo 30 anos que hace gym y juega videojuegos, hasta $500"
+    )
+    return WAITING_REGALO
+
+async def cmd_regalo_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    descripcion = update.message.text.strip()
+    await update.message.reply_text("Buscando ideas de regalo...")
+    resultado = await features_module.regalo(descripcion)
+    await update.message.reply_text("IDEAS DE REGALO\n\n" + resultado)
+    return ConversationHandler.END
+
+# ── /seguimiento ──────────────────────────────────────────────────────────────
+
+async def cmd_seguimiento_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "A quien le das seguimiento y por que no ha respondido?\n\n"
+        "Ejemplos: cliente que pidio cotizacion hace 3 dias y no contesta, "
+        "jefe al que le mande propuesta hace una semana, "
+        "proveedor que quedo en mandar factura y no llega"
+    )
+    return WAITING_SEGUIMIENTO
+
+async def cmd_seguimiento_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    contexto = update.message.text.strip()
+    await update.message.reply_text("Redactando el mensaje...")
+    resultado = await features_module.seguimiento(contexto)
+    await update.message.reply_text(resultado)
+    return ConversationHandler.END
+
 # ── /hora ─────────────────────────────────────────────────────────────────────
 
 async def cmd_hora_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
@@ -915,6 +1066,41 @@ def main():
         },
         fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
     )
+    decide_conv = ConversationHandler(
+        entry_points=[CommandHandler("decide", cmd_decide_start)],
+        states={WAITING_DECIDE: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_decide_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
+    pregunta_conv = ConversationHandler(
+        entry_points=[CommandHandler("pregunta", cmd_pregunta_start)],
+        states={WAITING_PREGUNTA: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_pregunta_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
+    precio_justo_conv = ConversationHandler(
+        entry_points=[CommandHandler("precio_justo", cmd_precio_justo_start)],
+        states={WAITING_PRECIO_JUSTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_precio_justo_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
+    aprende_conv = ConversationHandler(
+        entry_points=[CommandHandler("aprende", cmd_aprende_start)],
+        states={WAITING_APRENDE: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_aprende_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
+    empieza_conv = ConversationHandler(
+        entry_points=[CommandHandler("empieza", cmd_empieza_start)],
+        states={WAITING_EMPIEZA: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_empieza_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
+    regalo_conv = ConversationHandler(
+        entry_points=[CommandHandler("regalo", cmd_regalo_start)],
+        states={WAITING_REGALO: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_regalo_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
+    seguimiento_conv = ConversationHandler(
+        entry_points=[CommandHandler("seguimiento", cmd_seguimiento_start)],
+        states={WAITING_SEGUIMIENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_seguimiento_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
 
     # Handlers simples
     app.add_handler(CommandHandler("start",        cmd_start))
@@ -949,6 +1135,13 @@ def main():
     app.add_handler(audio_conv)
     app.add_handler(que_falta_conv)
     app.add_handler(compra_conv)
+    app.add_handler(decide_conv)
+    app.add_handler(pregunta_conv)
+    app.add_handler(precio_justo_conv)
+    app.add_handler(aprende_conv)
+    app.add_handler(empieza_conv)
+    app.add_handler(regalo_conv)
+    app.add_handler(seguimiento_conv)
 
     app.add_handler(CallbackQueryHandler(callback_tareas))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_unknown))
