@@ -901,3 +901,48 @@ def _que_falta_sync(plan: str) -> str:
 
 async def que_falta(plan: str) -> str:
     return await asyncio.to_thread(_que_falta_sync, plan)
+
+
+# ── COMPARADOR / ASESOR DE COMPRA ─────────────────────────────────────────────
+
+def _analizar_compra_sync(producto: str, contexto: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=600,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un asesor de compras inteligente. El usuario quiere comprar algo. "
+                        "Tu trabajo NO es solo comparar lo que pidio, sino expandir su criterio: "
+                        "mostrarle opciones que quiza no conoce, cuestionar si realmente necesita "
+                        "lo que pide, y darle una recomendacion honesta basada en su contexto.\n\n"
+                        "Estructura tu respuesta asi:\n\n"
+                        "LO QUE PEDISTE\n"
+                        "[Descripcion breve de lo que es y para que sirve realmente]\n\n"
+                        "ALTERNATIVAS\n"
+                        "Mas barata: [opcion + por que puede ser suficiente]\n"
+                        "Similar valor: [competidor directo que vale comparar]\n"
+                        "Premium: [si existe algo mejor y cuando vale el extra]\n\n"
+                        "LO QUE NO ESTABAS CONSIDERANDO\n"
+                        "[1-2 criterios que la gente ignora al comprar esto]\n\n"
+                        "RECOMENDACION SEGUN TU CASO\n"
+                        "[Dada su descripcion, cual es la mejor opcion y por que]\n\n"
+                        "Responde en espanol. Sin asteriscos. Concreto y directo."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Quiero comprar: {producto}\nMi situacion: {contexto}",
+                },
+            ],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude analizar la compra. Intenta de nuevo."
+
+
+async def analizar_compra(producto: str, contexto: str) -> str:
+    return await asyncio.to_thread(_analizar_compra_sync, producto, contexto)

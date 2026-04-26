@@ -45,6 +45,8 @@ WAITING_CONTRAPUNTO  = 10
 WAITING_FOTO         = 11
 WAITING_AUDIO        = 12
 WAITING_QUE_FALTA    = 13
+WAITING_COMPRA       = 14
+WAITING_COMPRA_CTX   = 15
 
 # ── REFERENCIA GLOBAL ─────────────────────────────────────────────────────────
 
@@ -103,7 +105,8 @@ AYUDA_TEXTO = (
 
     "🧠 ASISTENTE\n"
     "/contrapunto  → Das tu posicion → el bot construye el mejor argumento en contra\n"
-    "/que_falta    → Describes tu plan → el bot detecta los puntos ciegos\n\n"
+    "/que_falta    → Describes tu plan → el bot detecta los puntos ciegos\n"
+    "/compra       → Dices que quieres comprar → alternatives, criterios ocultos y recomendacion\n\n"
 
     "💼 TRABAJO\n"
     "/sap          → Que transaccion de SAP usar y como ejecutarla\n\n"
@@ -603,6 +606,36 @@ async def cmd_que_falta_recibir(update: Update, _context: ContextTypes.DEFAULT_T
     await update.message.reply_text(resultado)
     return ConversationHandler.END
 
+# ── /compra ───────────────────────────────────────────────────────────────────
+
+async def cmd_compra_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "Que quieres comprar o contratar?\n\n"
+        "Ejemplos: cartera MagSafe, suscripcion de streaming, "
+        "laptop para trabajo, audífonos inalámbricos, seguro de carro"
+    )
+    return WAITING_COMPRA
+
+async def cmd_compra_producto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["compra_producto"] = update.message.text.strip()
+    await update.message.reply_text(
+        "Para que lo usas y cual es tu presupuesto aproximado?\n\n"
+        "Ejemplos: lo uso diario para trabajo, tengo unos $1,500 pesos, "
+        "es un regalo, quiero lo mejor sin importar precio"
+    )
+    return WAITING_COMPRA_CTX
+
+async def cmd_compra_contexto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    producto = context.user_data.get("compra_producto", "")
+    ctx = update.message.text.strip()
+    await update.message.reply_text("Analizando opciones...")
+    resultado = await features_module.analizar_compra(producto, ctx)
+    await update.message.reply_text(resultado)
+    return ConversationHandler.END
+
 # ── /hora ─────────────────────────────────────────────────────────────────────
 
 async def cmd_hora_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
@@ -874,6 +907,14 @@ def main():
         states={WAITING_QUE_FALTA: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_que_falta_recibir)]},
         fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
     )
+    compra_conv = ConversationHandler(
+        entry_points=[CommandHandler("compra", cmd_compra_start)],
+        states={
+            WAITING_COMPRA:     [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_compra_producto)],
+            WAITING_COMPRA_CTX: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_compra_contexto)],
+        },
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
 
     # Handlers simples
     app.add_handler(CommandHandler("start",        cmd_start))
@@ -907,6 +948,7 @@ def main():
     app.add_handler(foto_conv)
     app.add_handler(audio_conv)
     app.add_handler(que_falta_conv)
+    app.add_handler(compra_conv)
 
     app.add_handler(CallbackQueryHandler(callback_tareas))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_unknown))
