@@ -3,6 +3,8 @@ features.py — Funcionalidades adicionales de Morning Commander
 """
 
 import asyncio
+import base64
+import io
 import re
 import requests
 from datetime import date
@@ -735,3 +737,167 @@ def _contrapunto_sync(posicion: str) -> str:
 
 async def contrapunto(posicion: str) -> str:
     return await asyncio.to_thread(_contrapunto_sync, posicion)
+
+
+# ── FOTO / IMAGEN ─────────────────────────────────────────────────────────────
+
+_PROMPTS_FOTO = {
+    "recibo": (
+        "Analiza este ticket o recibo y extrae:\n"
+        "ESTABLECIMIENTO: [nombre si aparece]\n"
+        "FECHA: [si aparece]\n"
+        "ITEMS:\n[lista de productos con precio]\n"
+        "TOTAL: $X\n"
+        "CATEGORIA: [comida / gasolina / farmacia / ropa / etc]\n"
+        "Sin asteriscos."
+    ),
+    "identificar": (
+        "Identifica lo que hay en esta imagen:\n"
+        "QUE ES: [nombre preciso]\n"
+        "DESCRIPCION: [2-3 caracteristicas clave]\n"
+        "DATO UTIL: [algo practico o curioso sobre esto]\n"
+        "Si no puedes identificarlo con certeza, di lo mas probable y por que."
+    ),
+    "nutricion": (
+        "Analiza nutricionalmente la comida en esta imagen:\n"
+        "PLATILLO: [nombre]\n"
+        "PORCION ESTIMADA: [tamano aproximado]\n"
+        "CALORIAS APROX: X kcal\n"
+        "PROTEINA: Xg   CARBS: Xg   GRASA: Xg\n"
+        "SEMAFORO: [Verde / Amarillo / Rojo] — [razon en una linea]\n"
+        "Nota: es estimacion visual. Sin asteriscos."
+    ),
+    "problema": (
+        "Analiza el problema que se ve en esta imagen:\n"
+        "PROBLEMA: [que esta mal]\n"
+        "CAUSA PROBABLE: [por que ocurrio]\n"
+        "PASOS PARA ARREGLARLO:\n1. ...\n2. ...\n"
+        "NECESITAS: [herramientas o materiales]\n"
+        "DIFICULTAD: [Facil / Medio / Llama a un profesional]\n"
+        "Sin asteriscos."
+    ),
+    "etiqueta": (
+        "Lee la etiqueta de este producto:\n"
+        "PRODUCTO: [nombre]\n"
+        "PARA QUE SIRVE: [uso en lenguaje simple]\n"
+        "INGREDIENTES A NOTAR: [los mas relevantes o de cuidado]\n"
+        "ALERTAS: [alergenos, contraindicaciones, precauciones]\n"
+        "LO QUE LA GENTE NO LEE: [dato util que suele ignorarse]\n"
+        "Sin tecnicismos innecesarios."
+    ),
+}
+
+def _analizar_foto_sync(image_bytes: bytes, tipo: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        b64 = base64.b64encode(image_bytes).decode("utf-8")
+        prompt = _PROMPTS_FOTO.get(tipo, "Describe detalladamente lo que ves en esta imagen.")
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=500,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                ],
+            }],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"No pude analizar la imagen. Intenta de nuevo. ({e})"
+
+
+async def analizar_foto(image_bytes: bytes, tipo: str) -> str:
+    return await asyncio.to_thread(_analizar_foto_sync, image_bytes, tipo)
+
+
+# ── AUDIO / VOZ ───────────────────────────────────────────────────────────────
+
+def _transcribir_sync(audio_bytes: bytes, filename: str = "audio.ogg") -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        buf = io.BytesIO(audio_bytes)
+        buf.name = filename
+        transcript = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=buf,
+            language="es",
+        )
+        return transcript.text.strip()
+    except Exception as e:
+        return f"No pude transcribir el audio. ({e})"
+
+
+def _minuta_sync(audio_bytes: bytes, filename: str = "audio.ogg") -> str:
+    texto = _transcribir_sync(audio_bytes, filename)
+    if texto.startswith("No pude"):
+        return texto
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=600,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Del texto de una reunion o conversacion, extrae:\n\n"
+                        "TEMAS TRATADOS:\n[lista]\n\n"
+                        "ACUERDOS Y DECISIONES:\n- [acuerdo + responsable si se menciona]\n\n"
+                        "PENDIENTES / PROXIMOS PASOS:\n- [tarea + quien + fecha si se menciona]\n\n"
+                        "PUNTOS IMPORTANTES:\n- [algo que no debe perderse]\n\n"
+                        "Responde en espanol. Sin asteriscos."
+                    ),
+                },
+                {"role": "user", "content": f"Transcripcion:\n{texto}"},
+            ],
+        )
+        acta = response.choices[0].message.content.strip()
+        return f"TRANSCRIPCION\n{texto}\n\n---\nMINUTA\n{acta}"
+    except Exception as e:
+        return f"Transcripcion lista pero no pude generar la minuta. ({e})\n\nTEXTO:\n{texto}"
+
+
+async def transcribir_audio(audio_bytes: bytes, filename: str = "audio.ogg") -> str:
+    return await asyncio.to_thread(_transcribir_sync, audio_bytes, filename)
+
+
+async def generar_minuta(audio_bytes: bytes, filename: str = "audio.ogg") -> str:
+    return await asyncio.to_thread(_minuta_sync, audio_bytes, filename)
+
+
+# ── QUE FALTA ─────────────────────────────────────────────────────────────────
+
+def _que_falta_sync(plan: str) -> str:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=400,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un consultor con experiencia. El usuario describe un plan, proyecto o decision. "
+                        "Tu trabajo es identificar puntos ciegos y preguntas sin responder.\n\n"
+                        "LO QUE NO ESTAS CONSIDERANDO:\n"
+                        "1. [punto ciego mas importante]\n"
+                        "2. [segundo punto]\n"
+                        "3. [tercero]\n\n"
+                        "PREGUNTAS SIN RESPONDER:\n"
+                        "- [pregunta critica que el plan no aborda]\n\n"
+                        "RIESGO PRINCIPAL: [lo que mas puede hacer fallar esto]\n\n"
+                        "Responde en espanol. Sin asteriscos. Directo."
+                    ),
+                },
+                {"role": "user", "content": plan},
+            ],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "No pude analizar el plan. Intenta de nuevo."
+
+
+async def que_falta(plan: str) -> str:
+    return await asyncio.to_thread(_que_falta_sync, plan)

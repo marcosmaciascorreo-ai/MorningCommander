@@ -42,6 +42,9 @@ WAITING_MOTIVACION   = 7
 WAITING_PLAYLIST     = 8
 WAITING_CITA         = 9
 WAITING_CONTRAPUNTO  = 10
+WAITING_FOTO         = 11
+WAITING_AUDIO        = 12
+WAITING_QUE_FALTA    = 13
 
 # ── REFERENCIA GLOBAL ─────────────────────────────────────────────────────────
 
@@ -87,8 +90,20 @@ AYUDA_TEXTO = (
     "/podcast      → Podcast recomendado con link directo a Spotify\n"
     "/playlist     → 10 canciones para lo que vayas a hacer (con links)\n\n"
 
+    "📷 FOTO\n"
+    "/leerecibo    → Foto de ticket o recibo → extrae items y total\n"
+    "/identificar  → Foto de cualquier cosa → te dice que es\n"
+    "/nutricion    → Foto de tu comida → calorias y macros aproximados\n"
+    "/problema     → Foto de algo roto o danado → diagnostico y pasos\n"
+    "/etiqueta     → Foto de etiqueta → explicacion en lenguaje simple\n\n"
+
+    "🎙 AUDIO\n"
+    "/transcribir  → Nota de voz o archivo de audio → transcripcion limpia\n"
+    "/minuta       → Audio de junta → acta con acuerdos y pendientes\n\n"
+
     "🧠 ASISTENTE\n"
-    "/contrapunto  → Das tu posicion y el bot construye el mejor argumento en contra\n\n"
+    "/contrapunto  → Das tu posicion → el bot construye el mejor argumento en contra\n"
+    "/que_falta    → Describes tu plan → el bot detecta los puntos ciegos\n\n"
 
     "💼 TRABAJO\n"
     "/sap          → Que transaccion de SAP usar y como ejecutarla\n\n"
@@ -476,6 +491,118 @@ async def cmd_cita_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("PLAN ESPECIAL EN CHIHUAHUA\n\n" + resultado)
     return ConversationHandler.END
 
+# ── /leerecibo /identificar /nutricion /problema /etiqueta ───────────────────
+
+async def _foto_start(update: Update, context: ContextTypes.DEFAULT_TYPE, tipo: str, instruccion: str):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    context.user_data["foto_tipo"] = tipo
+    await update.message.reply_text(instruccion)
+    return WAITING_FOTO
+
+async def cmd_leerecibo_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await _foto_start(update, context, "recibo", "Manda la foto del ticket o recibo.")
+
+async def cmd_identificar_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await _foto_start(update, context, "identificar", "Manda la foto de lo que quieres identificar.")
+
+async def cmd_nutricion_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await _foto_start(update, context, "nutricion", "Manda la foto de tu platillo o comida.")
+
+async def cmd_problema_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await _foto_start(update, context, "problema", "Manda la foto del problema: algo roto, dano, falla, lo que sea.")
+
+async def cmd_etiqueta_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await _foto_start(update, context, "etiqueta", "Manda la foto de la etiqueta del producto.")
+
+async def cmd_foto_recibir(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    tipo = context.user_data.get("foto_tipo", "identificar")
+    await update.message.reply_text("Analizando imagen...")
+    photo = update.message.photo[-1]
+    file = await context.bot.get_file(photo.file_id)
+    image_bytes = bytes(await file.download_as_bytearray())
+    resultado = await features_module.analizar_foto(image_bytes, tipo)
+    await update.message.reply_text(resultado)
+    return ConversationHandler.END
+
+# ── /transcribir /minuta ──────────────────────────────────────────────────────
+
+async def cmd_transcribir_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    context.user_data["audio_tipo"] = "transcribir"
+    await update.message.reply_text(
+        "Manda la nota de voz o archivo de audio.\n\n"
+        "Tip: para audios largos graba con la app nativa del telefono "
+        "(graba con pantalla apagada) y envia el archivo aqui."
+    )
+    return WAITING_AUDIO
+
+async def cmd_minuta_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    context.user_data["audio_tipo"] = "minuta"
+    await update.message.reply_text(
+        "Manda el audio de la junta.\n\n"
+        "Tip: graba con la app nativa del telefono y envia el archivo aqui."
+    )
+    return WAITING_AUDIO
+
+async def cmd_audio_recibir(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    tipo = context.user_data.get("audio_tipo", "transcribir")
+
+    if update.message.voice:
+        file_obj = update.message.voice
+        filename = "audio.ogg"
+    elif update.message.audio:
+        file_obj = update.message.audio
+        filename = update.message.audio.file_name or "audio.mp3"
+    elif update.message.document:
+        file_obj = update.message.document
+        filename = update.message.document.file_name or "audio.mp3"
+    else:
+        await update.message.reply_text("No detecte audio. Manda una nota de voz o archivo de audio.")
+        return WAITING_AUDIO
+
+    if tipo == "transcribir":
+        await update.message.reply_text("Transcribiendo audio...")
+    else:
+        await update.message.reply_text("Transcribiendo y generando minuta...")
+
+    file = await context.bot.get_file(file_obj.file_id)
+    audio_bytes = bytes(await file.download_as_bytearray())
+
+    if tipo == "transcribir":
+        resultado = await features_module.transcribir_audio(audio_bytes, filename)
+        await update.message.reply_text("TRANSCRIPCION\n\n" + resultado)
+    else:
+        resultado = await features_module.generar_minuta(audio_bytes, filename)
+        await update.message.reply_text(resultado)
+    return ConversationHandler.END
+
+# ── /que_falta ────────────────────────────────────────────────────────────────
+
+async def cmd_que_falta_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    if not is_me(update):
+        await deny(update)
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "Describeme tu plan, proyecto o decision.\n\n"
+        "Ejemplos: voy a abrir un negocio de comida, quiero cambiar de trabajo, "
+        "planeo hacer un viaje a Europa en diciembre"
+    )
+    return WAITING_QUE_FALTA
+
+async def cmd_que_falta_recibir(update: Update, _context: ContextTypes.DEFAULT_TYPE):
+    plan = update.message.text.strip()
+    await update.message.reply_text("Analizando puntos ciegos...")
+    resultado = await features_module.que_falta(plan)
+    await update.message.reply_text(resultado)
+    return ConversationHandler.END
+
 # ── /hora ─────────────────────────────────────────────────────────────────────
 
 async def cmd_hora_start(update: Update, _context: ContextTypes.DEFAULT_TYPE):
@@ -721,6 +848,32 @@ def main():
         states={WAITING_CONTRAPUNTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_contrapunto_recibir)]},
         fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
     )
+    foto_conv = ConversationHandler(
+        entry_points=[
+            CommandHandler("leerecibo",   cmd_leerecibo_start),
+            CommandHandler("identificar", cmd_identificar_start),
+            CommandHandler("nutricion",   cmd_nutricion_start),
+            CommandHandler("problema",    cmd_problema_start),
+            CommandHandler("etiqueta",    cmd_etiqueta_start),
+        ],
+        states={WAITING_FOTO: [MessageHandler(filters.PHOTO, cmd_foto_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
+    audio_conv = ConversationHandler(
+        entry_points=[
+            CommandHandler("transcribir", cmd_transcribir_start),
+            CommandHandler("minuta",      cmd_minuta_start),
+        ],
+        states={WAITING_AUDIO: [MessageHandler(
+            filters.VOICE | filters.AUDIO | filters.Document.ALL, cmd_audio_recibir
+        )]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
+    que_falta_conv = ConversationHandler(
+        entry_points=[CommandHandler("que_falta", cmd_que_falta_start)],
+        states={WAITING_QUE_FALTA: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_que_falta_recibir)]},
+        fallbacks=[CommandHandler("cancelar", cmd_cancelar), MessageHandler(filters.COMMAND, cmd_cancelar)],
+    )
 
     # Handlers simples
     app.add_handler(CommandHandler("start",        cmd_start))
@@ -751,6 +904,9 @@ def main():
     app.add_handler(playlist_conv)
     app.add_handler(cita_conv)
     app.add_handler(contrapunto_conv)
+    app.add_handler(foto_conv)
+    app.add_handler(audio_conv)
+    app.add_handler(que_falta_conv)
 
     app.add_handler(CallbackQueryHandler(callback_tareas))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_unknown))
